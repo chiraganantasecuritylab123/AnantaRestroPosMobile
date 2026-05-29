@@ -93,6 +93,16 @@ android {
             keyPassword 'android'
         }
     }
+
+    // Hard-exclude ABIs to avoid Windows long-path limits during CMake/ninja builds.
+    splits {
+        abi {
+            enable true
+            reset()
+            include "arm64-v8a"
+            universalApk false
+        }
+    }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
