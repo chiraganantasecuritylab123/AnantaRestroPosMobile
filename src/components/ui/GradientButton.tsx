@@ -4,9 +4,11 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  View,
   ViewStyle,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
+import {ChevronRightIcon} from './icons';
 import {colors, radii} from '../../theme';
 
 type Props = {
@@ -16,6 +18,8 @@ type Props = {
   loading?: boolean;
   style?: ViewStyle;
   showArrow?: boolean;
+  /** Override gradient; use two stops or repeat one color for a solid fill. */
+  gradientColors?: readonly [string, string, ...string[]];
 };
 
 export const GradientButton: React.FC<Props> = ({
@@ -25,6 +29,7 @@ export const GradientButton: React.FC<Props> = ({
   loading,
   style,
   showArrow = true,
+  gradientColors,
 }) => (
   <TouchableOpacity
     onPress={onPress}
@@ -32,17 +37,21 @@ export const GradientButton: React.FC<Props> = ({
     activeOpacity={0.88}
     style={[styles.wrap, style, (disabled || loading) && styles.dim]}>
     <LinearGradient
-      colors={[...colors.gradientCta]}
+      colors={
+        gradientColors ? [...gradientColors] : [...colors.gradientGreen]
+      }
       start={{x: 0, y: 0.5}}
       end={{x: 1, y: 0.5}}
       style={styles.gradient}>
       {loading ? (
         <ActivityIndicator color={colors.white} />
       ) : (
-        <Text style={styles.text}>
-          {title}
-          {showArrow ? '  →' : ''}
-        </Text>
+        <View style={styles.labelRow}>
+          <Text style={styles.text}>{title}</Text>
+          {showArrow ? (
+            <ChevronRightIcon size={18} color={colors.white} strokeWidth={2.5} />
+          ) : null}
+        </View>
       )}
     </LinearGradient>
   </TouchableOpacity>
@@ -59,6 +68,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
   },
   text: {
     color: colors.white,

@@ -5,6 +5,7 @@ const AUTH_KEY = 'auth.token.payload.v1';
 export type StoredAuthPayload = {
   token: string;
   user: unknown;
+  outletId?: string | null;
 };
 
 export async function loadAuthFromStorage(): Promise<StoredAuthPayload | null> {

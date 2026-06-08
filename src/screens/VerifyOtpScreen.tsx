@@ -1,5 +1,6 @@
-import React, {useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {
+  Image,
   View,
   Text,
   StyleSheet,
@@ -15,15 +16,19 @@ import {
   useVerifyOtpMutation,
 } from '../services/authApi';
 import {useAppDispatch} from '../useAppHooks';
-import {setAuth} from '../features/authTokenSlice';
+import {setAuth, setOutletId} from '../features/authTokenSlice';
+import {extractOutletIdFromUser, pickOutletId} from '../utils/outletId';
 import {
-  BrandHeader,
+  ChevronLeftIcon,
   GradientButton,
+  LockIcon,
   LoginScreenBackground,
   OtpInput,
+  ShieldIcon,
 } from '../components/ui';
 import {colors, radii, spacing, typography} from '../theme';
 import type {AuthStackParamList} from '../navigation/types';
+import {extractSixDigitOtp} from '../utils/otpAutoFill';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'VerifyOtp'>;
 
@@ -36,17 +41,14 @@ function formatCountdown(seconds: number) {
 export const VerifyOtpScreen: React.FC<Props> = ({navigation, route}) => {
   const {phoneMasked, preAuthToken, expiresInSec = 300, devHint} = route.params;
   const [otp, setOtp] = useState('');
+  const [apiOtpHint, setApiOtpHint] = useState(devHint ?? '');
   const [error, setError] = useState<string | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(expiresInSec);
   const [verifyOtp, {isLoading: verifying}] = useVerifyOtpMutation();
   const [sendOtp, {isLoading: resending}] = useSendOtpMutation();
   const dispatch = useAppDispatch();
-
-  useEffect(() => {
-    if (__DEV__ && devHint && devHint.length === 6) {
-      setOtp(devHint);
-    }
-  }, [devHint]);
+  const autoVerifyRef = useRef(false);
+  const lastSubmittedOtpRef = useRef('');
 
   useEffect(() => {
     if (secondsLeft <= 0) {
@@ -58,38 +60,99 @@ export const VerifyOtpScreen: React.FC<Props> = ({navigation, route}) => {
     return () => clearInterval(id);
   }, [secondsLeft]);
 
-  const onVerify = async () => {
-    setError(null);
+  const submitVerify = useCallback(
+    async (code: string) => {
+      const normalized = extractSixDigitOtp(code) ?? code;
+      if (normalized.length < 6 || verifying) {
+        return;
+      }
+      if (lastSubmittedOtpRef.current === normalized) {
+        return;
+      }
+      lastSubmittedOtpRef.current = normalized;
+      setError(null);
+      try {
+        const res = await verifyOtp({otp: normalized, preAuthToken}).unwrap();
+        if (!res?.success || !res?.accessToken) {
+          lastSubmittedOtpRef.current = '';
+          setError(res?.message ?? 'Invalid OTP');
+          return;
+        }
+        dispatch(
+          setAuth({
+            token: res.accessToken,
+            user: res.user ?? null,
+          }),
+        );
+        const outletFromOtp = pickOutletId(
+          res.user?.tenant_id,
+          res.outlet_id != null ? String(res.outlet_id) : null,
+          res.outletId != null ? String(res.outletId) : null,
+          extractOutletIdFromUser(res.user),
+        );
+        if (outletFromOtp) {
+          dispatch(setOutletId(outletFromOtp));
+        }
+      } catch (e: any) {
+        lastSubmittedOtpRef.current = '';
+        setError(e?.data?.message ?? 'Invalid OTP');
+      }
+    },
+    [dispatch, preAuthToken, verifyOtp, verifying],
+  );
+
+  useEffect(() => {
+    const hint = extractSixDigitOtp(apiOtpHint);
+    if (!hint) {
+      return;
+    }
+    setOtp(hint);
+    const timer = setTimeout(() => {
+      void submitVerify(hint);
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [apiOtpHint, submitVerify]);
+
+  const onVerify = () => {
     if (otp.length < 6) {
       setError('Enter the 6-digit OTP');
       return;
     }
-    try {
-      const res = await verifyOtp({otp, preAuthToken}).unwrap();
-      if (!res?.success || !res?.accessToken) {
-        setError(res?.message ?? 'Invalid OTP');
+    void submitVerify(otp);
+  };
+
+  const onOtpComplete = useCallback(
+    (code: string) => {
+      if (autoVerifyRef.current) {
         return;
       }
-      dispatch(
-        setAuth({
-          token: res.accessToken,
-          user: res.user ?? null,
-        }),
-      );
-    } catch (e: any) {
-      setError(e?.data?.message ?? 'Invalid OTP');
-    }
-  };
+      autoVerifyRef.current = true;
+      void submitVerify(code);
+    },
+    [submitVerify],
+  );
+
+  const onOtpChange = useCallback((code: string) => {
+    autoVerifyRef.current = false;
+    lastSubmittedOtpRef.current = '';
+    setError(null);
+    setOtp(code);
+  }, []);
 
   const onResend = async () => {
     if (secondsLeft > 0 || resending) {
       return;
     }
     setError(null);
+    autoVerifyRef.current = false;
+    lastSubmittedOtpRef.current = '';
     try {
       const res = await sendOtp({preAuthToken}).unwrap();
       setSecondsLeft(res?.expiresInSec ?? 300);
       setOtp('');
+      if (res?.devHint) {
+        setApiOtpHint(res.devHint);
+      }
     } catch (e: any) {
       setError(e?.data?.message ?? 'Unable to resend OTP');
     }
@@ -104,17 +167,28 @@ export const VerifyOtpScreen: React.FC<Props> = ({navigation, route}) => {
           style={styles.backBtn}
           onPress={() => navigation.goBack()}
           hitSlop={{top: 12, bottom: 12, left: 12, right: 12}}>
-          <Text style={styles.backText}>←</Text>
+          <ChevronLeftIcon size={22} color={colors.navy} />
         </TouchableOpacity>
 
         <KeyboardAvoidingView
           style={styles.flex}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 44 : 0}>
           <ScrollView
             contentContainerStyle={styles.scroll}
             keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}>
-            <BrandHeader style={styles.brand} />
+            showsVerticalScrollIndicator={false}
+            bounces={false}>
+            <View style={styles.brand}>
+              <Image
+                source={require('../assets/splash-screen-logo.png')}
+                style={styles.logo}
+                resizeMode="contain"
+              />
+              <Text style={styles.tagline}>
+                Smart Billing. Complete Business Control.
+              </Text>
+            </View>
 
             <Text style={styles.title}>Verify Your Number</Text>
             <Text style={styles.subtitle}>
@@ -126,19 +200,29 @@ export const VerifyOtpScreen: React.FC<Props> = ({navigation, route}) => {
                 onPress={() => navigation.navigate('Login')}
                 hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}>
                 <Text style={styles.edit}>
-                  ✎ Edit
+                  Edit ✎
                 </Text>
               </TouchableOpacity>
             </View>
 
-            <OtpInput value={otp} onChange={setOtp} />
-
-            {__DEV__ && devHint ? (
-              <Text style={styles.devHint}>Dev OTP: {devHint}</Text>
+            <View style={styles.otpWrap}>
+              <OtpInput
+                value={otp}
+                onChange={onOtpChange}
+                onComplete={onOtpComplete}
+                autoFocus
+              />
+            </View>
+            {__DEV__ && apiOtpHint ? (
+              <Text style={styles.devHint}>
+                Dev OTP hint: {apiOtpHint}
+              </Text>
             ) : null}
-
+            
             <View style={styles.validityRow}>
-              <Text style={styles.validityIcon}>🛡</Text>
+              <View style={styles.validityBadge}>
+                <ShieldIcon size={18} color={colors.green} />
+              </View>
               <Text style={styles.validityText}>
                 Your OTP is valid for {validityMinutes} minutes
               </Text>
@@ -176,21 +260,21 @@ export const VerifyOtpScreen: React.FC<Props> = ({navigation, route}) => {
               loading={verifying}
               style={styles.verifyBtn}
             />
-
-            <View style={styles.secureFooter}>
-              <View style={styles.lockCircle}>
-                <Text style={styles.lockIcon}>🔒</Text>
-              </View>
-              <View style={styles.secureTextCol}>
-                <Text style={styles.secureTitle}>
-                  We never share your information
-                </Text>
-                <Text style={styles.secureSub}>
-                  Secure • Trusted • Reliable
-                </Text>
-              </View>
-            </View>
           </ScrollView>
+
+          <View style={styles.secureFooter}>
+            <View style={styles.lockCircle}>
+              <LockIcon size={16} color={colors.muted} />
+            </View>
+            <View style={styles.secureTextCol}>
+              <Text style={styles.secureTitle}>
+                We never share your information
+              </Text>
+              <Text style={styles.secureSub}>
+                Secure • Trusted • Reliable
+              </Text>
+            </View>
+          </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </LoginScreenBackground>
@@ -202,42 +286,58 @@ const styles = StyleSheet.create({
   flex: {flex: 1},
   backBtn: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 56 : 16,
+    top: Platform.OS === 'ios' ? 50 : 12,
     left: spacing.lg,
     zIndex: 10,
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
   },
   backText: {
     fontSize: 24,
     color: colors.navy,
-    fontWeight: '600',
+    fontWeight: '400',
   },
   scroll: {
     flexGrow: 1,
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xxxl,
-    paddingBottom: spacing.xxxl,
+    paddingTop: spacing.xl + 6,
+    paddingBottom: spacing.lg,
   },
   brand: {
     alignSelf: 'center',
-    marginBottom: spacing.xxl,
+    alignItems: 'center',
+    marginBottom: spacing.xl + 4,
+  },
+  logo: {
+    width: 220,
+    height: 150,
+  },
+  tagline: {
+    marginTop: -10,
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#5F6981',
+    textAlign: 'center',
   },
   title: {
     ...typography.hero,
-    fontSize: 26,
+    fontSize: 24,
+    lineHeight: 48,
+    textAlign: 'center',
     marginBottom: spacing.sm,
   },
   subtitle: {
     ...typography.body,
-    fontSize: 15,
+    fontSize: 14,
+    textAlign: 'center',
+    color: '#5B647B',
   },
   phoneRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     alignItems: 'center',
+    justifyContent: 'center',
     marginTop: spacing.xs,
     marginBottom: spacing.xl,
     gap: spacing.sm,
@@ -248,9 +348,12 @@ const styles = StyleSheet.create({
     color: colors.navy,
   },
   edit: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     color: colors.green,
+  },
+  otpWrap: {
+    marginTop: spacing.xs,
   },
   devHint: {
     marginTop: spacing.sm,
@@ -261,27 +364,36 @@ const styles = StyleSheet.create({
   validityRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     marginTop: spacing.lg,
     gap: spacing.sm,
   },
-  validityIcon: {fontSize: 16},
+  validityBadge: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#DCFCE7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  validityIcon: {fontSize: 14},
   validityText: {
-    fontSize: 13,
+    fontSize: 14,
     color: colors.muted,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   resendPill: {
     marginTop: spacing.lg,
-    backgroundColor: colors.borderLight,
+    backgroundColor: '#F1F3F6',
     borderRadius: radii.pill,
-    paddingVertical: 14,
+    paddingVertical: 16,
     paddingHorizontal: spacing.lg,
     alignItems: 'center',
   },
   resendText: {
     fontSize: 14,
-    color: colors.muted,
-    fontWeight: '500',
+    color: '#5F6981',
+    fontWeight: '600',
   },
   resendTimer: {
     color: colors.green,
@@ -300,14 +412,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   verifyBtn: {
-    marginTop: spacing.xl,
+    marginTop: spacing.lg + 4,
   },
   secureFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: spacing.xxl,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.lg,
+    paddingBottom: spacing.xl,
     gap: spacing.md,
-    paddingHorizontal: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.06)',
+    backgroundColor: 'rgba(255,255,255,0.6)',
   },
   lockCircle: {
     width: 40,
@@ -318,15 +435,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   lockIcon: {fontSize: 18},
-  secureTextCol: {flex: 1},
+  secureTextCol: {},
   secureTitle: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.navy,
+    color: '#5F6981',
   },
   secureSub: {
     marginTop: 2,
     fontSize: 12,
-    color: colors.muted,
+    color: '#5F6981',
+    fontWeight: '600',
   },
 });

@@ -1,5 +1,11 @@
 import {createApi} from '@reduxjs/toolkit/query/react';
 import {baseQueryWithReauthHandling} from './baseApi';
+import {setOutletId} from '../features/authTokenSlice';
+import {extractOutletIdFromPosInit} from '../utils/outletId';
+import {
+  normalizePrintSettings,
+  type PrintSettingsConfig,
+} from '../utils/printConfig';
 
 export interface Category {
   id: number;
@@ -39,14 +45,33 @@ export interface MenuItem {
   addons: unknown[];
   variants: unknown[];
   recipeItems: unknown[];
+  automatic_inventory_enabled?: boolean;
+  automaticInventoryEnabled?: boolean;
+}
+
+export interface PosOutletSummary {
+  id?: number | string;
+  outlet_id?: number | string;
+  title?: string;
+  name?: string;
+  is_default?: boolean;
+  isDefault?: boolean;
 }
 
 export interface PosInitResponse {
+  outlet_id?: number | string;
+  outletId?: number | string;
+  current_outlet_id?: number | string;
+  outlet?: {id?: number | string; title?: string};
+  currentOutlet?: {id?: number | string};
+  outlets?: PosOutletSummary[];
   categories: Category[];
   paymentTypes: PaymentType[];
-  printSettings: unknown | null;
+  printSettings: PrintSettingsConfig | null;
   storeSettings: {
     tenant_id: number;
+    outlet_id?: number | string;
+    outletId?: number | string;
     store_image: string | null;
     store_name: string | null;
     address: string | null;
@@ -74,7 +99,26 @@ export const posApi = createApi({
         url: '/pos/init',
         method: 'GET',
       }),
+      transformResponse: (response: PosInitResponse & Record<string, unknown>) => ({
+        ...response,
+        printSettings: normalizePrintSettings(
+          response.printSettings ??
+            response.print_settings ??
+            response.printer_settings,
+        ),
+      }),
       providesTags: ['PosInit'],
+      async onQueryStarted(_arg, {dispatch, queryFulfilled}) {
+        try {
+          const {data} = await queryFulfilled;
+          const outletId = extractOutletIdFromPosInit(data);
+          if (outletId) {
+            dispatch(setOutletId(outletId));
+          }
+        } catch {
+          // ignore
+        }
+      },
     }),
   }),
 });

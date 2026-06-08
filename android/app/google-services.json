@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "510074388641",
+    "project_id": "hrms-42c0f",
+    "storage_bucket": "hrms-42c0f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:510074388641:android:52e276467105973794f0e0",
+        "android_client_info": {
+          "package_name": "com.anantaa.swadeshpos"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDK-YuAozk0hjkijHQS93D-TMzOLTdeHMM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

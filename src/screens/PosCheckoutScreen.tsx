@@ -18,9 +18,11 @@ import {
   useAddCustomerMutation,
   useSearchCustomersQuery,
 } from '../services/customerApi';
+import {useGetPosInitQuery} from '../services/posApi';
 import {
   clearCart,
   removeItem,
+  setBillMode,
   setDeliveryType,
   setItemNotes,
   setItemQuantity,
@@ -29,14 +31,37 @@ import {
 } from '../features/cartSlice';
 import type {DeliveryType} from '../features/cartSlice';
 import {useAppDispatch, useAppSelector} from '../useAppHooks';
+import {usePosOrderDraftHydration} from '../hooks/usePosOrderDraftHydration';
 import {
   useCreateOrderAndInvoiceMutation,
   useCreateOrderMutation,
 } from '../services/orderApi';
 import {addOrderHistoryItem} from '../features/orderHistorySlice';
 import type {PosStackParamList} from '../navigation/types';
-import {GradientButton, ScreenBackground} from '../components/ui';
+import {
+  CheckIcon,
+  ChevronLeftIcon,
+  MinusIcon,
+  PlusIcon,
+  GradientButton,
+  ScreenBackground,
+} from '../components/ui';
 import {cardShadow, colors} from '../theme';
+import {
+  formatPrintSkippedMessage,
+  printOnOrderPlaced,
+  wasReceiptPrinted,
+} from '../services/orderPlacementPrint';
+import {getReceiptPrintSkipReason} from '../utils/printConfig';
+import {
+  buildCreateOrderAndInvoiceRequest,
+  buildCreateOrderRequest,
+  computeCartAmount,
+  parseOrderId,
+  parseTokenNo,
+  resolveServiceChargeRate,
+} from '../utils/posOrder';
+import {resolveCurrencySymbol} from '../utils/currency';
 
 const BG = colors.background;
 const CHARCOAL = colors.navy;
@@ -54,6 +79,7 @@ const DELIVERY_OPTIONS: {key: DeliveryType; label: string; hint: string}[] = [
 type Nav = NativeStackNavigationProp<PosStackParamList, 'PosCheckout'>;
 
 export const PosCheckoutScreen: React.FC = () => {
+  usePosOrderDraftHydration();
   const navigation = useNavigation<Nav>();
   const dispatch = useAppDispatch();
   const cart = useAppSelector(state => state.cart);
@@ -66,7 +92,9 @@ export const PosCheckoutScreen: React.FC = () => {
     birthDate: '1990-01-01',
     gender: 'male' as 'male' | 'female' | 'other',
   });
-  const [useInvoice, setUseInvoice] = useState(true);
+  const [useInvoice, setUseInvoice] = useState(
+    () => cart.billMode === 'invoice',
+  );
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [successModal, setSuccessModal] = useState<{
@@ -95,6 +123,7 @@ export const PosCheckoutScreen: React.FC = () => {
     };
   }, []);
 
+  const {data: posInit} = useGetPosInitQuery();
   const {data: customers = []} = useSearchCustomersQuery(query, {
     skip: query.trim().length < 1,
   });
@@ -103,19 +132,20 @@ export const PosCheckoutScreen: React.FC = () => {
   const [createOrderAndInvoice, {isLoading: isCreatingOrderInvoice}] =
     useCreateOrderAndInvoiceMutation();
 
-  const amount = useMemo(() => {
-    const netTotal = cart.items.reduce(
-      (sum, i) => sum + Number(i.net_price) * i.quantity,
-      0,
-    );
-    const taxTotal = cart.items.reduce((sum, i) => {
-      const raw = Number(i.net_price) * i.quantity;
-      return sum + raw * (Number(i.tax_rate) / 100);
-    }, 0);
-    const serviceChargeTotal = netTotal * 0.1;
-    const total = netTotal + taxTotal + serviceChargeTotal;
-    return {netTotal, taxTotal, serviceChargeTotal, total};
-  }, [cart.items]);
+  const serviceChargeRate = useMemo(
+    () => resolveServiceChargeRate(cart.deliveryType, posInit?.serviceCharge),
+    [cart.deliveryType, posInit?.serviceCharge],
+  );
+  const amount = useMemo(
+    () => computeCartAmount(cart.items, serviceChargeRate),
+    [cart.items, serviceChargeRate],
+  );
+
+  const currency = resolveCurrencySymbol(posInit?.storeSettings?.currency);
+
+  useEffect(() => {
+    setUseInvoice(cart.billMode === 'invoice');
+  }, [cart.billMode]);
 
   const selectSearchCustomer = (c: (typeof customers)[0]) => {
     dispatch(
@@ -136,19 +166,35 @@ export const PosCheckoutScreen: React.FC = () => {
       return;
     }
 
-    const basePayload = {
-      cart: cart.items,
+    const orderInput = {
+      items: cart.items,
       deliveryType: cart.deliveryType,
-      customerType: 'CUSTOMER',
-      customerId: cart.selectedCustomer,
-      tableId: cart.tableId ?? '',
-      selectedQrOrderItem: null,
+      selectedCustomer: cart.selectedCustomer,
+      tableId: cart.tableId,
+      selectedQrOrderItem: null as string | number | null,
+      serviceCharge: posInit?.serviceCharge,
     };
 
     const paymentTitle =
       cart.paymentTypes?.find(
         pt => String(pt?.id) === String(cart.selectedPaymentType),
       )?.title ?? undefined;
+
+    const itemsSnapshot = cart.items.map(line => ({ ...line }));
+    const storeSettings = posInit?.storeSettings ?? {
+      tenant_id: 0,
+      store_image: null,
+      store_name: null,
+      address: null,
+      phone: null,
+      email: null,
+      currency: null,
+      is_qr_menu_enabled: false,
+      unique_qr_code: null,
+      is_qr_order_enabled: null,
+      is_feedback_enabled: false,
+      unique_id: null,
+    };
 
     try {
       if (useInvoice) {
@@ -164,26 +210,55 @@ export const PosCheckoutScreen: React.FC = () => {
           return;
         }
 
-        const res = await createOrderAndInvoice({
-          ...basePayload,
-          ...amount,
-          selectedPaymentType: cart.selectedPaymentType ?? '',
-        }).unwrap();
+        const invoiceBody = buildCreateOrderAndInvoiceRequest({
+          ...orderInput,
+          selectedPaymentType: paymentId,
+        });
+        const res = await createOrderAndInvoice(invoiceBody).unwrap();
+
+        const tokenNo = parseTokenNo(res);
+        const orderId = parseOrderId(res.orderId);
+        const invoiceId = parseOrderId(res.invoiceId);
+
+        const printOutcome = await printOnOrderPlaced({
+          printSettings: posInit?.printSettings,
+          storeSettings,
+          currency,
+          items: itemsSnapshot,
+          netTotal: amount.netTotal,
+          taxTotal: amount.taxTotal,
+          serviceChargeTotal: amount.serviceChargeTotal,
+          total: amount.total,
+          deliveryType: cart.deliveryType,
+          tableTitle: cart.selectedTable?.table_title ?? null,
+          customerName: cart.selectedCustomer?.name ?? 'Walk-in customer',
+          paymentMethod: paymentTitle,
+          orderResponse: res,
+          invoiceId,
+        });
 
         setSuccessModal({
-          tokenNo: res.tokenNo,
-          orderId: res.orderId,
-          invoiceId: res.invoiceId,
+          tokenNo,
+          orderId,
+          invoiceId,
           total: amount.total,
           customerName: cart.selectedCustomer?.name ?? 'Walk-in customer',
         });
 
+        const skipReason = await getReceiptPrintSkipReason(posInit?.printSettings);
+        const printErr = formatPrintSkippedMessage(printOutcome, skipReason);
+        if (printErr) {
+          showToast(`Order saved. ${printErr}`);
+        } else if (wasReceiptPrinted(printOutcome)) {
+          showToast('Order saved. Receipt printed.');
+        }
+
         dispatch(
           addOrderHistoryItem({
-            id: `inv-${res.orderId}-${Date.now()}`,
-            tokenNo: res.tokenNo,
-            orderId: res.orderId,
-            invoiceId: res.invoiceId,
+            id: `inv-${orderId}-${Date.now()}`,
+            tokenNo,
+            orderId,
+            invoiceId,
             total: amount.total,
             customerName: cart.selectedCustomer?.name ?? 'Walk-in customer',
             createdAt: new Date().toISOString(),
@@ -192,20 +267,48 @@ export const PosCheckoutScreen: React.FC = () => {
           }),
         );
       } else {
-        const res = await createOrder(basePayload).unwrap();
+        const orderBody = buildCreateOrderRequest(orderInput);
+        const res = await createOrder(orderBody).unwrap();
+
+        const tokenNo = parseTokenNo(res);
+        const orderId = parseOrderId(res.orderId);
+
+        const printOutcome = await printOnOrderPlaced({
+          printSettings: posInit?.printSettings,
+          storeSettings,
+          currency,
+          items: itemsSnapshot,
+          netTotal: amount.netTotal,
+          taxTotal: amount.taxTotal,
+          serviceChargeTotal: amount.serviceChargeTotal,
+          total: amount.total,
+          deliveryType: cart.deliveryType,
+          tableTitle: cart.selectedTable?.table_title ?? null,
+          customerName: cart.selectedCustomer?.name ?? 'Walk-in customer',
+          paymentMethod: paymentTitle,
+          orderResponse: res,
+        });
 
         setSuccessModal({
-          tokenNo: res.tokenNo,
-          orderId: res.orderId,
+          tokenNo,
+          orderId,
           total: amount.total,
           customerName: cart.selectedCustomer?.name ?? 'Walk-in customer',
         });
 
+        const skipReason = await getReceiptPrintSkipReason(posInit?.printSettings);
+        const printErr = formatPrintSkippedMessage(printOutcome, skipReason);
+        if (printErr) {
+          showToast(`Order saved. ${printErr}`);
+        } else if (wasReceiptPrinted(printOutcome)) {
+          showToast('Order saved. Receipt printed.');
+        }
+
         dispatch(
           addOrderHistoryItem({
-            id: `ord-${res.orderId}-${Date.now()}`,
-            tokenNo: res.tokenNo,
-            orderId: res.orderId,
+            id: `ord-${orderId}-${Date.now()}`,
+            tokenNo,
+            orderId,
             total: amount.total,
             customerName: cart.selectedCustomer?.name ?? 'Walk-in customer',
             createdAt: new Date().toISOString(),
@@ -215,8 +318,13 @@ export const PosCheckoutScreen: React.FC = () => {
         );
       }
       dispatch(clearCart());
-    } catch {
-      showToast('Unable to confirm order. Please try again.');
+    } catch (e: unknown) {
+      const err = e as {data?: {code?: string; message?: string}};
+      const msg =
+        err?.data?.code === 'INVALID_OUTLET'
+          ? 'Invalid outlet. Return to POS home, wait for the menu to load, then try again.'
+          : (err?.data?.message ?? 'Unable to confirm order. Please try again.');
+      showToast(msg);
     }
   };
 
@@ -248,7 +356,7 @@ export const PosCheckoutScreen: React.FC = () => {
           style={styles.backBtn}
           onPress={() => navigation.goBack()}
           hitSlop={{top: 12, bottom: 12, left: 12, right: 12}}>
-          <Text style={styles.backBtnText}>←</Text>
+          <ChevronLeftIcon size={22} color={WARM} />
         </TouchableOpacity>
         <View style={styles.topBarCenter}>
           <Text style={styles.topTitle}>Checkout</Text>
@@ -298,7 +406,7 @@ export const PosCheckoutScreen: React.FC = () => {
                           <Text style={styles.resultPhone}>{c.phone}</Text>
                         </View>
                         {selected ? (
-                          <Text style={styles.resultCheck}>✓</Text>
+                          <CheckIcon size={18} color={ACCENT} strokeWidth={3} />
                         ) : (
                           <Text style={styles.resultTapHint}>Select</Text>
                         )}
@@ -373,7 +481,10 @@ export const PosCheckoutScreen: React.FC = () => {
             <View style={[styles.card, cardShadow, styles.billRow]}>
               <TouchableOpacity
                 style={[styles.billPill, useInvoice && styles.billPillOn]}
-                onPress={() => setUseInvoice(true)}>
+                onPress={() => {
+                  setUseInvoice(true);
+                  dispatch(setBillMode('invoice'));
+                }}>
                 <Text
                   style={[styles.billPillText, useInvoice && styles.billPillTextOn]}>
                   Order + Invoice
@@ -381,7 +492,10 @@ export const PosCheckoutScreen: React.FC = () => {
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.billPill, !useInvoice && styles.billPillOn]}
-                onPress={() => setUseInvoice(false)}>
+                onPress={() => {
+                  setUseInvoice(false);
+                  dispatch(setBillMode('order'));
+                }}>
                 <Text
                   style={[
                     styles.billPillText,
@@ -427,13 +541,17 @@ export const PosCheckoutScreen: React.FC = () => {
                 {item.title}
               </Text>
               <TouchableOpacity
-                onPress={() => dispatch(removeItem(item.id))}
+                onPress={() =>
+                  dispatch(
+                    removeItem({ id: item.id, lineKey: item.lineKey }),
+                  )
+                }
                 hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}>
                 <Text style={styles.removeLink}>Remove</Text>
               </TouchableOpacity>
             </View>
             <Text style={styles.linePrice}>
-              ${Number(item.net_price).toFixed(2)} each
+              {currency} {Number(item.net_price).toFixed(2)} each
             </Text>
             <View style={styles.qtyRow}>
               <Text style={styles.qtyLabel}>Qty</Text>
@@ -448,7 +566,7 @@ export const PosCheckoutScreen: React.FC = () => {
                       }),
                     )
                   }>
-                  <Text style={styles.stepBtnText}>−</Text>
+                  <MinusIcon size={20} color={WARM} strokeWidth={2.5} />
                 </TouchableOpacity>
                 <Text style={styles.stepVal}>{item.quantity}</Text>
                 <TouchableOpacity
@@ -461,7 +579,7 @@ export const PosCheckoutScreen: React.FC = () => {
                       }),
                     )
                   }>
-                  <Text style={styles.stepBtnTextLight}>+</Text>
+                  <PlusIcon size={20} color={WHITE} strokeWidth={2.5} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -483,21 +601,27 @@ export const PosCheckoutScreen: React.FC = () => {
             <Text style={styles.summaryTitle}>Summary</Text>
             <View style={styles.sumLine}>
               <Text style={styles.sumMuted}>Net</Text>
-              <Text style={styles.sumVal}>${amount.netTotal.toFixed(2)}</Text>
+              <Text style={styles.sumVal}>
+                {currency} {amount.netTotal.toFixed(2)}
+              </Text>
             </View>
             <View style={styles.sumLine}>
               <Text style={styles.sumMuted}>Tax</Text>
-              <Text style={styles.sumVal}>${amount.taxTotal.toFixed(2)}</Text>
+              <Text style={styles.sumVal}>
+                {currency} {amount.taxTotal.toFixed(2)}
+              </Text>
             </View>
             <View style={styles.sumLine}>
               <Text style={styles.sumMuted}>Service</Text>
               <Text style={styles.sumVal}>
-                ${amount.serviceChargeTotal.toFixed(2)}
+                {currency} {amount.serviceChargeTotal.toFixed(2)}
               </Text>
             </View>
             <View style={[styles.sumLine, styles.sumTotalRow]}>
               <Text style={styles.sumTotalLabel}>Total</Text>
-              <Text style={styles.sumTotalVal}>${amount.total.toFixed(2)}</Text>
+              <Text style={styles.sumTotalVal}>
+                {currency} {amount.total.toFixed(2)}
+              </Text>
             </View>
             <GradientButton
               title={isSubmitting ? 'Submitting…' : 'Confirm order'}
@@ -642,7 +766,7 @@ export const PosCheckoutScreen: React.FC = () => {
                   </Text>
                 ) : null}
                 <Text style={styles.successTotal}>
-                  Total ${successModal.total.toFixed(2)}
+                  Total {currency} {successModal.total.toFixed(2)}
                 </Text>
                 <Text style={styles.successCustomer} numberOfLines={2}>
                   {successModal.customerName}

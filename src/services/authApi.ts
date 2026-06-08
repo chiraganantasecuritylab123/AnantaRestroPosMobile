@@ -17,6 +17,9 @@ export interface AuthUser {
   scope: string;
   tenant_id: number;
   is_active: number;
+  outlet_id?: number | string;
+  outletId?: number | string;
+  default_outlet_id?: number | string;
 }
 
 export interface SigninResponse {
@@ -60,6 +63,8 @@ export interface VerifyOtpResponse {
   message: string;
   accessToken?: string;
   user?: AuthUser;
+  outlet_id?: number | string;
+  outletId?: number | string;
   code?: string;
 }
 

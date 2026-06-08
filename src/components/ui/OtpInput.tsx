@@ -1,6 +1,7 @@
-import React, {useRef} from 'react';
+import React, {useEffect, useRef} from 'react';
 import {
   NativeSyntheticEvent,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -14,16 +15,33 @@ const OTP_LENGTH = 6;
 type Props = {
   value: string;
   onChange: (value: string) => void;
+  /** Fires once when 6 digits are entered (typing, paste, or SMS autofill). */
+  onComplete?: (value: string) => void;
+  autoFocus?: boolean;
 };
 
-export const OtpInput: React.FC<Props> = ({value, onChange}) => {
+export const OtpInput: React.FC<Props> = ({
+  value,
+  onChange,
+  onComplete,
+  autoFocus = true,
+}) => {
   const inputs = useRef<Array<TextInput | null>>([]);
+  const hiddenInputRef = useRef<TextInput | null>(null);
   const digits = value.split('').concat(Array(OTP_LENGTH).fill('')).slice(0, OTP_LENGTH);
+
+  const emitChange = (next: string) => {
+    const cleaned = next.replace(/\D/g, '').slice(0, OTP_LENGTH);
+    onChange(cleaned);
+    if (cleaned.length === OTP_LENGTH) {
+      onComplete?.(cleaned);
+    }
+  };
 
   const updateAt = (index: number, char: string) => {
     const next = digits.slice();
     next[index] = char;
-    onChange(next.join('').replace(/\s/g, '').slice(0, OTP_LENGTH));
+    emitChange(next.join('').replace(/\s/g, ''));
   };
 
   const onChangeText = (index: number, text: string) => {
@@ -33,9 +51,8 @@ export const OtpInput: React.FC<Props> = ({value, onChange}) => {
       return;
     }
     if (cleaned.length > 1) {
-      const merged = (value + cleaned).replace(/\D/g, '').slice(0, OTP_LENGTH);
-      onChange(merged);
-      const focusIdx = Math.min(merged.length, OTP_LENGTH - 1);
+      emitChange(cleaned);
+      const focusIdx = Math.min(cleaned.length, OTP_LENGTH - 1);
       inputs.current[focusIdx]?.focus();
       return;
     }
@@ -55,36 +72,65 @@ export const OtpInput: React.FC<Props> = ({value, onChange}) => {
     }
   };
 
+  useEffect(() => {
+    if (!autoFocus) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      hiddenInputRef.current?.focus();
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [autoFocus]);
+
   return (
-    <View style={styles.row}>
-      {digits.map((digit, index) => {
-        const focused = value.length === index;
-        const filled = !!digit;
-        return (
-          <View
-            key={index}
-            style={[
-              styles.box,
-              focused && styles.boxFocused,
-              filled && !focused && styles.boxFilled,
-            ]}>
-            <TextInput
-              ref={ref => {
-                inputs.current[index] = ref;
-              }}
-              style={styles.input}
-              value={digit}
-              onChangeText={t => onChangeText(index, t)}
-              onKeyPress={e => onKeyPress(index, e)}
-              keyboardType="number-pad"
-              maxLength={OTP_LENGTH}
-              selectTextOnFocus
-              accessibilityLabel={`OTP digit ${index + 1}`}
-            />
-            {!digit ? <Text style={styles.placeholder}>−</Text> : null}
-          </View>
-        );
-      })}
+    <View style={styles.wrap}>
+      <TextInput
+        ref={hiddenInputRef}
+        style={styles.hiddenAutofill}
+        value={value}
+        onChangeText={emitChange}
+        keyboardType="number-pad"
+        maxLength={OTP_LENGTH}
+        textContentType="oneTimeCode"
+        autoComplete={Platform.OS === 'android' ? 'sms-otp' : 'off'}
+        importantForAutofill="yes"
+        caretHidden
+        accessibilityLabel="OTP autofill"
+      />
+      <View style={styles.row}>
+        {digits.map((digit, index) => {
+          const focused = value.length === index;
+          const filled = !!digit;
+          return (
+            <View
+              key={index}
+              style={[
+                styles.box,
+                focused && styles.boxFocused,
+                filled && !focused && styles.boxFilled,
+              ]}>
+              <TextInput
+                ref={ref => {
+                  inputs.current[index] = ref;
+                }}
+                style={styles.input}
+                value={digit}
+                onChangeText={t => onChangeText(index, t)}
+                onKeyPress={e => onKeyPress(index, e)}
+                onFocus={() => hiddenInputRef.current?.focus()}
+                keyboardType="number-pad"
+                maxLength={OTP_LENGTH}
+                selectTextOnFocus
+                textContentType={index === 0 ? 'oneTimeCode' : 'none'}
+                autoComplete={index === 0 ? 'sms-otp' : 'off'}
+                importantForAutofill={index === 0 ? 'yes' : 'no'}
+                accessibilityLabel={`OTP digit ${index + 1}`}
+              />
+              {!digit ? <Text style={styles.placeholder}>−</Text> : null}
+            </View>
+          );
+        })}
+      </View>
     </View>
   );
 };
@@ -92,6 +138,17 @@ export const OtpInput: React.FC<Props> = ({value, onChange}) => {
 const BOX = 48;
 
 const styles = StyleSheet.create({
+  wrap: {
+    position: 'relative',
+  },
+  hiddenAutofill: {
+    position: 'absolute',
+    opacity: 0,
+    width: 1,
+    height: 1,
+    top: 0,
+    left: 0,
+  },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',

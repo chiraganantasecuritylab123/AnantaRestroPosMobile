@@ -14,8 +14,16 @@ if linkage != nil
   use_frameworks! :linkage => linkage.to_sym
 end
 
+flipperkit_version = '0.273.0'
+
 target 'AnantaRestroPosMobile' do
   config = use_native_modules!
+
+  # Flipper desktop debugging (Debug configuration only)
+  pod 'FlipperKit', flipperkit_version, :configurations => ['Debug']
+  pod 'FlipperKit/FlipperKitLayoutPlugin', flipperkit_version, :configurations => ['Debug']
+  pod 'FlipperKit/SKIOSNetworkPlugin', flipperkit_version, :configurations => ['Debug']
+  pod 'FlipperKit/FlipperKitUserDefaultsPlugin', flipperkit_version, :configurations => ['Debug']
 
   use_react_native!(
     :path => config[:reactNativePath],

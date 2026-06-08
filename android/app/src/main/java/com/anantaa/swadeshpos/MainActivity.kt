@@ -1,4 +1,4 @@
-package com.anantarestroposmobile
+package com.anantaa.swadeshpos
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate

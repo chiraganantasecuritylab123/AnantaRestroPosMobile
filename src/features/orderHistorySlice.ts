@@ -3,8 +3,8 @@ import {createSlice, PayloadAction} from '@reduxjs/toolkit';
 export interface OrderHistoryItem {
   id: string;
   tokenNo: number;
-  orderId: number;
-  invoiceId?: number;
+  orderId: string | number | undefined;
+  invoiceId?: number | string | undefined;
   total: number;
   customerName: string;
   createdAt: string;

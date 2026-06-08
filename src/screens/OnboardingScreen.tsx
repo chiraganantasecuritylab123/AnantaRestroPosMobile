@@ -1,73 +1,106 @@
-import React, {useRef, useState} from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Dimensions,
   FlatList,
+  Image,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
-import type {NativeStackScreenProps} from '@react-navigation/native-stack';
-import {BrandHeader, GradientButton, ScreenBackground} from '../components/ui';
-import {colors, radii, spacing, typography} from '../theme';
-import type {AuthStackParamList} from '../navigation/types';
-import {setOnboardingComplete} from '../storage/appStorage';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { GradientButton, Icon, ScreenBackground } from '../components/ui';
+import type { IconName } from '../components/ui';
+import { cardShadow, colors, spacing } from '../theme';
+import type { AuthStackParamList } from '../navigation/types';
+import { setOnboardingComplete } from '../storage/appStorage';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Onboarding'>;
 
-const {width: SCREEN_W} = Dimensions.get('window');
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+const SLIDE_PAD = 24;
+
+type CardFeature = {
+  iconName: IconName;
+  title: string;
+};
 
 type Slide = {
   id: string;
-  headline: string;
-  headlineColors: string[];
+  titleLines: string[];
   body: string;
-  features: {icon: string; title: string; desc: string; color: string}[];
+  image: any;
+  cardFeatures: CardFeature[];
 };
 
 const SLIDES: Slide[] = [
   {
     id: '1',
-    headline: 'Fast Billing.\nSmart Service.\nHappy Guests.',
-    headlineColors: [colors.navy, colors.green, colors.orange],
-    body: 'Take orders in seconds with a waiter-first POS built for restaurants.',
-    features: [
-      {icon: '⚡', title: 'Fast Billing', desc: 'Create orders in seconds', color: colors.green},
-      {icon: '📦', title: 'Live Menu', desc: 'Synced from your kitchen', color: colors.orange},
-      {icon: '👥', title: 'Table Service', desc: 'Assign tables quickly', color: colors.blue},
-      {icon: '📊', title: 'Shift Overview', desc: 'Track today at a glance', color: colors.purple},
+    titleLines: ['Smart Billing.', 'Complete Business', 'Control.'],
+    body: 'Manage your business, streamline operations and grow faster with SwadeshPOS.',
+    image: require('../assets/mobile-1.png'),
+    cardFeatures: [
+      { iconName: 'clock', title: 'Fast Billing' },
+      { iconName: 'package', title: 'Smart Inventory' },
+      { iconName: 'users', title: 'Customer Management' },
+      { iconName: 'bar-chart', title: 'Real-Time Reports' },
     ],
   },
   {
     id: '2',
-    headline: 'Real-Time Insights.\nSmarter Decisions.\nBetter Growth.',
-    headlineColors: [colors.navy, colors.green, colors.orange],
-    body: 'See orders, revenue, and activity from your shift dashboard.',
-    features: [
-      {icon: '📈', title: 'Live Stats', desc: 'Orders and revenue today', color: colors.green},
-      {icon: '📋', title: 'Order History', desc: 'Recent sales at a tap', color: colors.orange},
-      {icon: '🍽', title: 'Variants & Addons', desc: 'Configure every dish', color: colors.blue},
-      {icon: '🔔', title: 'Quick Alerts', desc: 'Menu and cart reminders', color: colors.purple},
+    titleLines: ['Real-Time Insights.', 'Smarter Decisions.', 'Better Growth.'],
+    body: 'Get real-time reports and powerful analytics to track performance and grow your business.',
+    image: require('../assets/mobile-2.png'),
+    cardFeatures: [
+      {
+        iconName: 'trending-up',
+        title: 'Real-Time Reports'
+      },
+      {
+        iconName: 'bar-chart',
+        title: 'Smart Analytics',
+      },
+      {
+        iconName: 'clipboard',
+        title: 'Custom Reports',
+      },
+      {
+        iconName: 'bell',
+        title: 'Instant Alerts',
+      },
     ],
   },
   {
     id: '3',
-    headline: 'Manage Everything.\nFrom Anywhere.\nAnytime.',
-    headlineColors: [colors.navy, colors.green, colors.orange],
-    body: 'Sign in once and serve guests from any device on your floor.',
-    features: [
-      {icon: '🌐', title: 'Access Anywhere', desc: 'Works on your mobile', color: colors.green},
-      {icon: '👤', title: 'Waiter Accounts', desc: 'Secure staff login', color: colors.orange},
-      {icon: '🛡', title: 'Secure & Reliable', desc: 'Token-based sessions', color: colors.blue},
-      {icon: '☁', title: 'Auto Sync', desc: 'Menu updates from server', color: colors.purple},
+    titleLines: ['Manage Everything.', 'From Anywhere.', 'Anytime.'],
+    body: 'Access your business, manage your team and stay in control - anytime, anywhere with SwadeshPOS.',
+    image: require('../assets/mobile-3.png'),
+    cardFeatures: [
+      {
+        iconName: 'globe',
+        title: 'Access Anywhere',
+      },
+      {
+        iconName: 'users',
+        title: 'Team Management',
+      },
+      {
+        iconName: 'shield',
+        title: 'Secure & Reliable',
+      },
+      {
+        iconName: 'globe',
+        title: 'Auto Sync',
+      },
     ],
   },
 ];
 
-export const OnboardingScreen: React.FC<Props> = ({navigation}) => {
+export const OnboardingScreen: React.FC<Props> = ({ navigation }) => {
   const [index, setIndex] = useState(0);
   const listRef = useRef<FlatList>(null);
 
@@ -83,59 +116,93 @@ export const OnboardingScreen: React.FC<Props> = ({navigation}) => {
 
   const next = () => {
     if (index < SLIDES.length - 1) {
-      listRef.current?.scrollToIndex({index: index + 1, animated: true});
+      listRef.current?.scrollToIndex({ index: index + 1, animated: true });
       setIndex(index + 1);
     } else {
       finish();
     }
   };
 
-  const renderSlide = ({item}: {item: Slide}) => {
-    const lines = item.headline.split('\n');
-    return (
-      <View style={[styles.slide, {width: SCREEN_W}]}>
-        <Text style={styles.slideBody}>{item.body}</Text>
-        <View style={styles.headlineBlock}>
-          {lines.map((line, i) => (
-            <Text
-              key={line}
-              style={[
-                styles.headlineLine,
-                {color: item.headlineColors[i] ?? colors.navy},
-              ]}>
-              {line}
-            </Text>
-          ))}
-        </View>
-        <View style={styles.featureList}>
-          {item.features.map(f => (
-            <View key={f.title} style={styles.featureRow}>
-              <View style={[styles.featureIcon, {backgroundColor: `${f.color}18`}]}>
-                <Text style={styles.featureEmoji}>{f.icon}</Text>
-              </View>
-              <View style={styles.featureText}>
-                <Text style={styles.featureTitle}>{f.title}</Text>
-                <Text style={styles.featureDesc}>{f.desc}</Text>
-              </View>
-            </View>
-          ))}
-        </View>
+  const renderCenteredSlide = (item: Slide) => (
+    <ScrollView
+      style={[styles.slideScroll, { width: SCREEN_W }]}
+      contentContainerStyle={styles.slideOneScrollContent}
+      showsVerticalScrollIndicator={false}
+      bounces={false}>
+      <View style={styles.slideOneHeader}>
+        {item.titleLines.map((line, i) => (
+          <Text
+            key={line}
+            style={[
+              styles.slideOneHeadline,
+              i === 1
+                ? styles.slideOneHeadlineGreen
+                : i === 2
+                  ? styles.slideOneHeadlineOrange
+                  : styles.slideOneHeadlineNavy,
+            ]}>
+            {line}
+          </Text>
+        ))}
+        {item.id === '1' || item.id === '3' ? (
+          <Text style={styles.slideOneBody}>
+            {item.id === '1'
+              ? 'Manage your business, streamline operations and grow faster with '
+              : 'Access your business, manage your team and stay in control - anytime, anywhere with '}
+            <Text style={styles.slideOneBodyBold}>SwadeshPOS</Text>.
+          </Text>
+        ) : (
+          <Text style={styles.slideOneBody}>{item.body}</Text>
+        )}
+        <View style={styles.slideOneAccent} />
       </View>
-    );
-  };
+
+      <View style={styles.slideOneHero}>
+        <Image
+          source={item.image}
+          style={[
+            styles.slideOneImage,
+            { height: Math.min(SCREEN_H * 0.38, 340) },
+          ]}
+          resizeMode="contain"
+        />
+      </View>
+
+      <View style={styles.slideOneFeatureCard}>
+        {item.cardFeatures.map((f, i) => (
+          <React.Fragment key={f.title}>
+            <View style={styles.slideOneFeatureCol}>
+              <View style={styles.slideOneFeatureIcon}>
+                <Icon name={f.iconName} size={20} color={colors.green} />
+              </View>
+              <Text style={styles.slideOneFeatureTitle}>{f.title}</Text>
+            </View>
+            {i < item.cardFeatures.length - 1 ? (
+              <View style={styles.slideOneFeatureDivider} />
+            ) : null}
+          </React.Fragment>
+        ))}
+      </View>
+    </ScrollView>
+  );
+
+  const renderSlide = ({ item }: { item: Slide }) => renderCenteredSlide(item);
 
   return (
     <ScreenBackground>
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <View style={styles.topRow}>
-          <BrandHeader compact />
-          <TouchableOpacity onPress={finish} hitSlop={{top: 12, bottom: 12, left: 12, right: 12}}>
+          <View />
+          <TouchableOpacity
+            onPress={finish}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Text style={styles.skip}>Skip</Text>
           </TouchableOpacity>
         </View>
 
         <FlatList
           ref={listRef}
+          style={styles.list}
           data={SLIDES}
           keyExtractor={s => s.id}
           renderItem={renderSlide}
@@ -153,10 +220,7 @@ export const OnboardingScreen: React.FC<Props> = ({navigation}) => {
         <View style={styles.footer}>
           <View style={styles.dots}>
             {SLIDES.map((_, i) => (
-              <View
-                key={i}
-                style={[styles.dot, i === index && styles.dotActive]}
-              />
+              <View key={i} style={[styles.dot, i === index && styles.dotActive]} />
             ))}
           </View>
           <GradientButton
@@ -170,7 +234,8 @@ export const OnboardingScreen: React.FC<Props> = ({navigation}) => {
 };
 
 const styles = StyleSheet.create({
-  safe: {flex: 1},
+  safe: { flex: 1 },
+  list: { flex: 1 },
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -179,53 +244,120 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
   },
   skip: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '600',
-    color: colors.muted,
+    color: '#3E4B74',
   },
-  slide: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.lg,
+  slideScroll: {
+    flex: 1,
   },
-  slideBody: {
-    ...typography.body,
-    marginBottom: spacing.lg,
-  },
-  headlineBlock: {marginBottom: spacing.xl},
-  headlineLine: {
-    fontSize: 26,
-    fontWeight: '800',
-    lineHeight: 34,
-    letterSpacing: -0.5,
-  },
-  featureList: {gap: spacing.md},
-  featureRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  featureIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: radii.md,
+  slideOneScrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: SLIDE_PAD,
+    paddingBottom: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  featureEmoji: {fontSize: 22},
-  featureText: {flex: 1},
-  featureTitle: {
+  slideOneHeader: {
+    width: '100%',
+  },
+  slideOneHeadline: {
+    fontSize: 28,
+    fontWeight: '800',
+    lineHeight: 38,
+    letterSpacing: -0.3,
+    textAlign: 'left',
+    width: '100%',
+  },
+  slideOneHeadlineNavy: {
+    color: colors.navy,
+  },
+  slideOneHeadlineGreen: {
+    color: colors.green,
+  },
+  slideOneHeadlineOrange: {
+    color: colors.orange,
+  },
+  slideOneBody: {
+    marginTop: 12,
     fontSize: 15,
+    lineHeight: 22,
+    color: '#5F6981',
+    fontWeight: '400',
+    textAlign: 'left',
+    width: '100%',
+    maxWidth: SCREEN_W - SLIDE_PAD * 2,
+  },
+  slideOneBodyBold: {
     fontWeight: '700',
     color: colors.navy,
   },
-  featureDesc: {
-    fontSize: 13,
-    color: colors.muted,
-    marginTop: 2,
+  slideOneAccent: {
+    marginTop: 14,
+    width: 56,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: colors.orange,
+    alignSelf: 'flex-start',
+  },
+  slideOneHero: {
+    marginTop: 16,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  slideOneImage: {
+    width: SCREEN_W - SLIDE_PAD * 2,
+    alignSelf: 'center',
+  },
+  slideOneFeatureCard: {
+    marginTop: 20,
+    width: '100%',
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+    flexDirection: 'row',
+    alignItems: 'stretch'
+  },
+  slideOneFeatureCol: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  slideOneFeatureDivider: {
+    width: StyleSheet.hairlineWidth,
+    backgroundColor: '#E8ECF2',
+    marginVertical: 2,
+  },
+  slideOneFeatureIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F3F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  slideOneFeatureIconText: {
+    fontSize: 18,
+  },
+  slideOneFeatureTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.navy,
+    textAlign: 'center',
+    lineHeight: 14,
+    minHeight: 28,
+  },
+  slideOneFeatureDesc: {
+    marginTop: 4,
+    fontSize: 10,
+    lineHeight: 13,
+    color: '#6B758C',
+    textAlign: 'center',
   },
   footer: {
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.xl,
+    paddingBottom: 16,
     gap: spacing.lg,
   },
   dots: {
@@ -237,10 +369,12 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: colors.border,
+    backgroundColor: '#D4D9E3',
   },
   dotActive: {
     backgroundColor: colors.orange,
-    width: 20,
+    width: 22,
+    height: 8,
+    borderRadius: 4,
   },
 });

@@ -1,19 +1,23 @@
 import {fetchBaseQuery} from '@reduxjs/toolkit/query/react';
 import type {BaseQueryFn} from '@reduxjs/toolkit/query';
+import {API_BASE_URL} from '@env';
 import type {RootState} from '../store';
+import {resolveOutletId} from '../utils/outletId';
 
-// const BASE_URL = 'http://localhost:8000/api/v1';
-// const BASE_URL = 'http://192.168.1.164:5173/api/v1';
-const BASE_URL = 'http://192.168.1.164:8001/api/v1';
-// const BASE_URL = 'http://192.168.1.164:8001/api/v1';
-// const BASE_URL = 'https://api.pos.anantalabs.in/api/v1';
+// export const BASE_URL = API_BASE_URL;
+export const BASE_URL = 'http://192.168.1.164:8001/api/v1';
 
 export const rawBaseQuery = fetchBaseQuery({
   baseUrl: BASE_URL,
   prepareHeaders: (headers, {getState}) => {
-    const token = (getState() as RootState)?.authToken?.value;
+    const state = getState() as RootState;
+    const token = state?.authToken?.value;
     if (token) {
       headers.set('Authorization', `Bearer ${token}`);
+    }
+    const outletId = resolveOutletId(state);
+    if (outletId) {
+      headers.set('x-outlet-id', outletId);
     }
     headers.set('Content-Type', 'application/json');
     return headers;
@@ -35,7 +39,6 @@ export const baseQueryWithReauthHandling: BaseQueryFn<
   if ((result as any)?.error?.status === 401) {
     api.dispatch({type: 'authToken/logout'});
   }
-
   return result;
 };
 

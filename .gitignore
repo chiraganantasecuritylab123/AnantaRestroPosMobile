@@ -33,7 +33,12 @@ local.properties
 .cxx/
 *.keystore
 !debug.keystore
+android/keystore.properties
 .kotlin/
+
+# Environment
+.env
+.env.local
 
 # node.js
 #
