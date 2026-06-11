@@ -1,6 +1,7 @@
 import React from 'react';
 import {StyleSheet, Text, TouchableOpacity, ViewStyle} from 'react-native';
-import {colors, radii} from '../../theme';
+import {colors, radii, spacing} from '../../theme';
+import {moderateScale, scale, verticalScale} from '../../utils/responsive';
 
 type Props = {
   label: string;
@@ -27,14 +28,14 @@ export const Chip: React.FC<Props> = ({label, selected, onPress, style}) => (
 
 const styles = StyleSheet.create({
   chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: verticalScale(10),
     borderRadius: radii.pill,
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.border,
-    marginRight: 8,
-    minHeight: 40,
+    marginRight: scale(8),
+    minHeight: verticalScale(40),
     justifyContent: 'center',
   },
   chipSelected: {
@@ -42,7 +43,7 @@ const styles = StyleSheet.create({
     borderColor: colors.green,
   },
   label: {
-    fontSize: 14,
+    fontSize: moderateScale(14),
     fontWeight: '600',
     color: colors.navy,
   },

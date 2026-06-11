@@ -1,6 +1,7 @@
 import React from 'react';
 import {StyleSheet, Text, View} from 'react-native';
 import {colors, radii} from '../../theme';
+import {moderateScale, scale, verticalScale} from '../../utils/responsive';
 
 type PaymentKind = 'cash' | 'upi' | 'card' | 'other';
 
@@ -45,13 +46,14 @@ export const PaymentBadge: React.FC<Props> = ({title}) => {
 
 const styles = StyleSheet.create({
   badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: scale(10),
+    paddingVertical: verticalScale(4),
     borderRadius: radii.sm,
-    maxWidth: 80,
+    maxWidth: scale(80),
+    flexShrink: 1,
   },
   text: {
-    fontSize: 11,
+    fontSize: moderateScale(11),
     fontWeight: '700',
   },
 });

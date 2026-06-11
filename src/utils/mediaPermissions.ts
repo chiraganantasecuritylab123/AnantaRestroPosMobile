@@ -1,4 +1,5 @@
-import {Alert, Linking, PermissionsAndroid, Platform} from 'react-native';
+import {Linking, PermissionsAndroid, Platform} from 'react-native';
+import {showDialog} from '../context/DialogProvider';
 
 export type MediaPermissionKind = 'gallery' | 'camera';
 
@@ -14,7 +15,7 @@ export function promptPermissionSettings(kind: MediaPermissionKind): void {
       ? 'Photo access is required to pick menu images. Open Settings and allow Photos access for this app.'
       : 'Camera access is required to take menu photos. Open Settings and allow Camera access for this app.';
 
-  Alert.alert(title, message, [
+  showDialog(title, message, [
     {text: 'Cancel', style: 'cancel'},
     {text: 'Open Settings', onPress: openAppSettings},
   ]);
@@ -45,12 +46,15 @@ export async function ensureGalleryPermission(): Promise<boolean> {
     return true;
   }
 
-  const permission =
-    Number(Platform.Version) >= 33
-      ? PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES
-      : PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE;
+  // Android 13+ uses the system Photo Picker via react-native-image-picker.
+  // No READ_MEDIA_IMAGES permission is required or requested.
+  if (Number(Platform.Version) >= 33) {
+    return true;
+  }
 
-  const result = await requestAndroidPermission(permission);
+  const result = await requestAndroidPermission(
+    PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+  );
   if (result === 'granted') {
     return true;
   }

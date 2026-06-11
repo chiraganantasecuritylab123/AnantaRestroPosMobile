@@ -1,6 +1,7 @@
 import React from 'react';
 import {StyleSheet, View, ViewStyle} from 'react-native';
-import {colors} from '../../theme';
+import {colors, radii} from '../../theme';
+import {moderateScale, scale, verticalScale} from '../../utils/responsive';
 
 type Props = {
   children: React.ReactNode;
@@ -24,33 +25,33 @@ const styles = StyleSheet.create({
   },
   blob: {
     position: 'absolute',
-    borderRadius: 999,
+    borderRadius: radii.pill,
     opacity: 0.35,
   },
   blobOrange: {
-    width: 180,
-    height: 180,
+    width: scale(180),
+    height: scale(180),
     backgroundColor: '#FFE4CC',
-    top: -40,
-    right: -50,
+    top: verticalScale(-40),
+    right: scale(-50),
   },
   blobGreen: {
-    width: 140,
-    height: 140,
+    width: scale(140),
+    height: scale(140),
     backgroundColor: '#D1FAE5',
-    bottom: 120,
-    left: -60,
+    bottom: verticalScale(120),
+    left: scale(-60),
   },
   dotGrid: {
     position: 'absolute',
-    top: 24,
-    right: 20,
-    width: 60,
-    height: 60,
+    top: verticalScale(24),
+    right: scale(20),
+    width: scale(60),
+    height: scale(60),
     opacity: 0.15,
     borderWidth: 1,
     borderColor: colors.muted,
     borderStyle: 'dashed',
-    borderRadius: 8,
+    borderRadius: moderateScale(8),
   },
 });

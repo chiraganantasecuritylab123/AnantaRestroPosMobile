@@ -1,8 +1,13 @@
 import {fetchBaseQuery} from '@reduxjs/toolkit/query/react';
 import type {BaseQueryFn} from '@reduxjs/toolkit/query';
 import {API_BASE_URL} from '@env';
+import {logout, markSubscriptionInactive} from '../features/authTokenSlice';
 import type {RootState} from '../store';
 import {resolveOutletId} from '../utils/outletId';
+import {
+  parseSubscriptionInactive,
+  shouldSkipSubscriptionCheck,
+} from '../utils/subscriptionApi';
 
 // export const BASE_URL = API_BASE_URL;
 export const BASE_URL = 'http://192.168.1.164:8001/api/v1';
@@ -35,9 +40,22 @@ export const baseQueryWithReauthHandling: BaseQueryFn<
   unknown
 > = async (args, api, extraOptions) => {
   const result = await rawBaseQuery(args, api, extraOptions);
+  const requestUrl = typeof args === 'string' ? args : args.url;
 
-  if ((result as any)?.error?.status === 401) {
-    api.dispatch({type: 'authToken/logout'});
+  if (!shouldSkipSubscriptionCheck(requestUrl)) {
+    const inactiveMessage =
+      parseSubscriptionInactive((result as {error?: {data?: unknown}})?.error
+        ?.data) ??
+      parseSubscriptionInactive((result as {data?: unknown})?.data);
+
+    if (inactiveMessage) {
+      api.dispatch(markSubscriptionInactive(inactiveMessage));
+      return result;
+    }
+  }
+
+  if ((result as {error?: {status?: number}})?.error?.status === 401) {
+    api.dispatch(logout());
   }
   return result;
 };

@@ -4,8 +4,11 @@
 
 import './src/notifications/fcmBackground';
 import { AppRegistry } from 'react-native';
+import { applyGlobalFont } from './src/theme/fonts';
 import App from './App';
 import { name as appName } from './app.json';
+
+applyGlobalFont();
 
 if (__DEV__) {
   const { setupFlipperDevTools } = require('./src/dev/setupFlipper');

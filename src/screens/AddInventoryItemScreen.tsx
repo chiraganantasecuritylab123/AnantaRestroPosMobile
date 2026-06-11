@@ -1,7 +1,6 @@
-import React, {useEffect, useMemo, useState} from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -14,24 +13,31 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
-import type {NativeStackScreenProps} from '@react-navigation/native-stack';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
   resolveAllLinkableMenuItems,
   useAddInventoryItemMutation,
   useGetLinkableMenuItemsQuery,
   type LinkableMenuItem,
 } from '../services/inventoryApi';
-import {useGetPosInitQuery} from '../services/posApi';
-import type {ProfileStackParamList} from '../navigation/types';
-import {Card, ChevronRightIcon, CloseIcon, GradientButton, TopHeader} from '../components/ui';
-import {cardShadow, colors, radii, spacing} from '../theme';
+import { useGetPosInitQuery } from '../services/posApi';
+import type { ProfileStackParamList } from '../navigation/types';
+import { Card, ChevronRightIcon, CloseIcon, GradientButton, TopHeader } from '../components/ui';
+import { showDialog } from '../context/DialogProvider';
+import { cardShadow, colors, radii, spacing } from '../theme';
+import {
+  maxContentWidth,
+  moderateScale,
+  scale,
+  verticalScale,
+} from '../utils/responsive';
 
 type Props = NativeStackScreenProps<ProfileStackParamList, 'AddInventoryItem'>;
 
 const UNIT_OPTIONS = ['pc', 'kg', 'g', 'l', 'ml', 'box', 'pack'];
 
-export const AddInventoryItemScreen: React.FC<Props> = ({navigation}) => {
+export const AddInventoryItemScreen: React.FC<Props> = ({ navigation }) => {
   const [title, setTitle] = useState('');
   const [selectedMenuItemId, setSelectedMenuItemId] = useState<string | null>(
     null,
@@ -48,8 +54,8 @@ export const AddInventoryItemScreen: React.FC<Props> = ({navigation}) => {
     isError: menuItemsError,
     refetch: refetchMenuItems,
   } = useGetLinkableMenuItemsQuery();
-  const {data: posInit} = useGetPosInitQuery();
-  const [addItem, {isLoading}] = useAddInventoryItemMutation();
+  const { data: posInit } = useGetPosInitQuery();
+  const [addItem, { isLoading }] = useAddInventoryItemMutation();
 
   useEffect(() => {
     if (pickerOpen) {
@@ -113,21 +119,21 @@ export const AddInventoryItemScreen: React.FC<Props> = ({navigation}) => {
 
   const onSubmit = async () => {
     if (!effectiveTitle) {
-      Alert.alert('Inventory', 'Select a menu item or enter item name.');
+      showDialog('Inventory', 'Select a menu item or enter item name.');
       return;
     }
     const qty = Number(quantity);
     const minQty = Number(minThreshold);
     if (!Number.isFinite(qty) || qty < 0) {
-      Alert.alert('Inventory', 'Enter a valid quantity.');
+      showDialog('Inventory', 'Enter a valid quantity.');
       return;
     }
     if (!Number.isFinite(minQty) || minQty < 0) {
-      Alert.alert('Inventory', 'Enter a valid minimum threshold.');
+      showDialog('Inventory', 'Enter a valid minimum threshold.');
       return;
     }
     if (!unit.trim()) {
-      Alert.alert('Inventory', 'Select a unit.');
+      showDialog('Inventory', 'Select a unit.');
       return;
     }
 
@@ -138,20 +144,20 @@ export const AddInventoryItemScreen: React.FC<Props> = ({navigation}) => {
         unit: unit.trim(),
         min_quantity_threshold: minQty,
         ...(selectedMenuItemId
-          ? {linkedMenuItemIds: [selectedMenuItemId]}
+          ? { linkedMenuItemIds: [selectedMenuItemId] }
           : {}),
       }).unwrap();
 
-      Alert.alert('Success', res.message ?? 'Inventory item added.', [
+      showDialog('Success', res.message ?? 'Inventory item added.', [
         {
           text: 'Add another',
           onPress: resetForm,
         },
-        {text: 'Done', onPress: () => navigation.goBack()},
+        { text: 'Done', onPress: () => navigation.goBack() },
       ]);
     } catch (e: unknown) {
-      const err = e as {data?: {message?: string}};
-      Alert.alert(
+      const err = e as { data?: { message?: string } };
+      showDialog(
         'Could not add item',
         err?.data?.message ?? 'Please try again.',
       );
@@ -171,6 +177,7 @@ export const AddInventoryItemScreen: React.FC<Props> = ({navigation}) => {
           />
 
           <ScrollView
+            style={styles.scrollView}
             contentContainerStyle={styles.scroll}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}>
@@ -201,7 +208,7 @@ export const AddInventoryItemScreen: React.FC<Props> = ({navigation}) => {
                   {selectedMenuItem?.title ?? 'Select menu item (optional)'}
                 </Text>
                 <ChevronRightIcon
-                  size={18}
+                  size={moderateScale(18)}
                   color={menuPickerDisabled ? colors.mutedLight : colors.muted}
                 />
               </TouchableOpacity>
@@ -295,17 +302,16 @@ export const AddInventoryItemScreen: React.FC<Props> = ({navigation}) => {
                 item.
               </Text>
             </Card>
+            <View style={styles.footer}>
+              <GradientButton
+                title={isLoading ? 'Saving…' : 'Save inventory item'}
+                onPress={onSubmit}
+                loading={isLoading}
+                disabled={isLoading || !canSave}
+                showArrow={false}
+              />
+            </View>
           </ScrollView>
-
-          <View style={styles.footer}>
-            <GradientButton
-              title={isLoading ? 'Saving…' : 'Save inventory item'}
-              onPress={onSubmit}
-              loading={isLoading}
-              disabled={isLoading || !canSave}
-              showArrow={false}
-            />
-          </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
 
@@ -326,8 +332,8 @@ export const AddInventoryItemScreen: React.FC<Props> = ({navigation}) => {
               <TouchableOpacity
                 style={styles.modalCloseBtn}
                 onPress={() => setPickerOpen(false)}
-                hitSlop={8}>
-                <CloseIcon size={22} color={colors.navy} />
+                hitSlop={scale(8)}>
+                <CloseIcon size={moderateScale(22)} color={colors.navy} />
               </TouchableOpacity>
             </View>
 
@@ -379,7 +385,7 @@ export const AddInventoryItemScreen: React.FC<Props> = ({navigation}) => {
                     ) : null}
                   </TouchableOpacity>
                 }
-                renderItem={({item}) => {
+                renderItem={({ item }) => {
                   const active = item.id === selectedMenuItemId;
                   const isLinked = Boolean(item.linked_inventory_item_id);
                   return (
@@ -477,8 +483,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8FAF8',
   },
-  flex: {flex: 1},
-  safe: {flex: 1},
+  flex: { flex: 1 },
+  safe: { flex: 1 },
+  scrollView: {
+    width: '100%',
+    alignSelf: 'center',
+    maxWidth: maxContentWidth(),
+  },
   scroll: {
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.sm,
@@ -501,29 +512,32 @@ const styles = StyleSheet.create({
     backgroundColor: colors.borderLight,
   },
   stepBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: moderateScale(28),
+    height: moderateScale(28),
+    borderRadius: moderateScale(14),
     backgroundColor: colors.navy,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   stepBadgeText: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     fontWeight: '800',
     color: colors.white,
   },
-  sectionTitles: {flex: 1},
+  sectionTitles: { flex: 1, flexShrink: 1 },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: moderateScale(16),
     fontWeight: '800',
     color: colors.navy,
+    flexShrink: 1,
   },
   sectionHint: {
-    marginTop: 2,
-    fontSize: 12,
+    marginTop: verticalScale(2),
+    fontSize: moderateScale(12),
     color: colors.muted,
-    lineHeight: 17,
+    lineHeight: moderateScale(17),
+    flexShrink: 1,
   },
   sectionBody: {
     padding: spacing.lg,
@@ -532,21 +546,21 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   fieldLabel: {
-    fontSize: 11,
+    fontSize: moderateScale(11),
     fontWeight: '700',
     color: colors.muted,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
-    marginBottom: 8,
+    marginBottom: verticalScale(8),
   },
   input: {
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radii.md,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
+    paddingHorizontal: scale(14),
+    paddingVertical: verticalScale(12),
+    fontSize: moderateScale(16),
     fontWeight: '500',
     color: colors.navy,
   },
@@ -563,8 +577,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radii.md,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
+    paddingHorizontal: scale(14),
+    paddingVertical: verticalScale(14),
     marginBottom: spacing.sm,
   },
   selectBtnDisabled: {
@@ -573,9 +587,10 @@ const styles = StyleSheet.create({
   },
   selectBtnText: {
     flex: 1,
-    fontSize: 16,
+    fontSize: moderateScale(16),
     fontWeight: '600',
     color: colors.navy,
+    flexShrink: 1,
   },
   selectBtnPlaceholder: {
     color: colors.mutedLight,
@@ -589,15 +604,16 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   clearLinkText: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     fontWeight: '700',
     color: colors.green,
   },
   helperText: {
-    fontSize: 12,
+    fontSize: moderateScale(12),
     color: colors.muted,
-    lineHeight: 17,
+    lineHeight: moderateScale(17),
     marginBottom: spacing.sm,
+    flexShrink: 1,
   },
   orRow: {
     flexDirection: 'row',
@@ -611,14 +627,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border,
   },
   orText: {
-    fontSize: 11,
+    fontSize: moderateScale(11),
     fontWeight: '800',
     color: colors.muted,
     letterSpacing: 0.6,
   },
   rowFields: {
     flexDirection: 'row',
-    gap: 12,
+    gap: scale(12),
   },
   halfField: {
     flex: 1,
@@ -626,11 +642,11 @@ const styles = StyleSheet.create({
   chipGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: scale(8),
   },
   chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: scale(14),
+    paddingVertical: verticalScale(10),
     borderRadius: radii.pill,
     borderWidth: 1,
     borderColor: colors.border,
@@ -641,9 +657,10 @@ const styles = StyleSheet.create({
     borderColor: colors.green,
   },
   chipText: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     fontWeight: '600',
     color: colors.navy,
+    flexShrink: 1,
   },
   chipTextActive: {
     color: colors.white,
@@ -654,15 +671,16 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     backgroundColor: '#ECFDF5',
     borderRadius: radii.pill,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(6),
     borderWidth: 1,
     borderColor: '#BBF7D0',
   },
   selectedPillText: {
-    fontSize: 12,
+    fontSize: moderateScale(12),
     fontWeight: '700',
     color: colors.greenDark,
+    flexShrink: 1,
   },
   tipCard: {
     padding: spacing.lg,
@@ -671,22 +689,20 @@ const styles = StyleSheet.create({
     borderColor: '#FDE68A',
   },
   tipTitle: {
-    fontSize: 14,
+    fontSize: moderateScale(14),
     fontWeight: '800',
     color: '#B45309',
+    flexShrink: 1,
   },
   tipText: {
     marginTop: spacing.sm,
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: moderateScale(13),
+    lineHeight: moderateScale(19),
     color: colors.muted,
+    flexShrink: 1,
   },
   footer: {
-    padding: spacing.xl,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.white,
-    ...cardShadow,
+    marginVertical: spacing.md,
   },
   modalBackdrop: {
     flex: 1,
@@ -703,9 +719,9 @@ const styles = StyleSheet.create({
   },
   modalHandle: {
     alignSelf: 'center',
-    width: 40,
-    height: 4,
-    borderRadius: 2,
+    width: scale(40),
+    height: verticalScale(4),
+    borderRadius: moderateScale(2),
     backgroundColor: colors.border,
     marginTop: spacing.sm,
     marginBottom: spacing.md,
@@ -717,23 +733,25 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: moderateScale(20),
     fontWeight: '800',
     color: colors.navy,
+    flexShrink: 1,
   },
   modalCloseBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: moderateScale(36),
+    height: moderateScale(36),
+    borderRadius: moderateScale(18),
     backgroundColor: colors.borderLight,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   modalLoader: {
     marginVertical: spacing.xl,
   },
   modalList: {
-    maxHeight: 360,
+    maxHeight: verticalScale(360),
   },
   modalEmpty: {
     alignItems: 'center',
@@ -741,12 +759,13 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   modalEmptyText: {
-    fontSize: 14,
+    fontSize: moderateScale(14),
     color: colors.muted,
     textAlign: 'center',
+    flexShrink: 1,
   },
   retryBtn: {
-    paddingVertical: 10,
+    paddingVertical: verticalScale(10),
     paddingHorizontal: spacing.lg,
     borderRadius: radii.pill,
     backgroundColor: colors.green,
@@ -754,13 +773,13 @@ const styles = StyleSheet.create({
   retryText: {
     color: colors.white,
     fontWeight: '700',
-    fontSize: 14,
+    fontSize: moderateScale(14),
   },
   menuRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 14,
+    paddingVertical: verticalScale(14),
     paddingHorizontal: spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderLight,
@@ -772,12 +791,14 @@ const styles = StyleSheet.create({
   },
   menuRowBody: {
     flex: 1,
+    flexShrink: 1,
   },
   menuRowMeta: {
-    marginTop: 2,
-    fontSize: 11,
+    marginTop: verticalScale(2),
+    fontSize: moderateScale(11),
     fontWeight: '600',
     color: colors.muted,
+    flexShrink: 1,
   },
   menuRowActive: {
     backgroundColor: '#ECFDF5',
@@ -785,18 +806,20 @@ const styles = StyleSheet.create({
   },
   menuRowText: {
     flex: 1,
-    fontSize: 16,
+    fontSize: moderateScale(16),
     fontWeight: '600',
     color: colors.navy,
+    flexShrink: 1,
   },
   menuRowTextActive: {
     color: colors.greenDark,
     fontWeight: '700',
   },
   menuRowCheck: {
-    fontSize: 16,
+    fontSize: moderateScale(16),
     fontWeight: '800',
     color: colors.green,
     marginLeft: spacing.sm,
+    flexShrink: 0,
   },
 });

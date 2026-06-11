@@ -4,6 +4,7 @@ import Svg, {Path} from 'react-native-svg';
 import {ConfigGateScreenLayout} from '../components/ConfigGateScreenLayout';
 import {openAppStoreListing} from '../utils/openExternalUrl';
 import {colors, spacing} from '../theme';
+import {moderateScale} from '../utils/responsive';
 
 type Props = {
   currentVersion: string;
@@ -12,8 +13,9 @@ type Props = {
 };
 
 function UpdateIcon() {
+  const iconSize = moderateScale(34);
   return (
-    <Svg width={34} height={34} viewBox="0 0 24 24" fill="none">
+    <Svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none">
       <Path
         d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"
         stroke={colors.green}
@@ -54,8 +56,10 @@ export const ForceUpdateScreen: React.FC<Props> = ({
 const styles = StyleSheet.create({
   versionMeta: {
     marginTop: spacing.lg,
-    fontSize: 13,
+    fontSize: moderateScale(13),
     fontWeight: '600',
     color: colors.mutedLight,
+    textAlign: 'center',
+    flexShrink: 1,
   },
 });

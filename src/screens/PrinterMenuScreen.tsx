@@ -1,7 +1,6 @@
 import React, {useCallback, useState} from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   ScrollView,
   StyleSheet,
@@ -26,10 +25,17 @@ import {useGetPosInitQuery} from '../services/posApi';
 import {isReceiptPrintEnabled} from '../utils/printConfig';
 import type {ProfileStackParamList} from '../navigation/types';
 import {handleProfileStackBack} from '../navigation/profileStackBack';
+import {showDialog} from '../context/DialogProvider';
 import type {PrinterConnectionStatus} from '../types/printer';
 import {Card, Icon, PrinterIcon, ScreenBackground, TopHeader} from '../components/ui';
 import type {IconName} from '../components/ui';
 import {colors, radii, spacing} from '../theme';
+import {
+  maxContentWidth,
+  moderateScale,
+  scale,
+  verticalScale,
+} from '../utils/responsive';
 
 type Props = NativeStackScreenProps<ProfileStackParamList, 'PrinterMenu'>;
 
@@ -89,7 +95,7 @@ export const PrinterMenuScreen: React.FC<Props> = ({navigation, route}) => {
       await saveAutoPrintOnOrder(enabled);
     } catch {
       setAutoPrintOnOrder(previous);
-      Alert.alert('Settings', 'Could not save auto-print preference.');
+      showDialog('Settings', 'Could not save auto-print preference.');
     } finally {
       setSavingAutoPrint(false);
     }
@@ -110,9 +116,9 @@ export const PrinterMenuScreen: React.FC<Props> = ({navigation, route}) => {
     try {
       const result = await action();
       if (result && 'ok' in result && !result.ok) {
-        Alert.alert('Printer', result.error ?? 'Action failed');
+        showDialog('Printer', result.error ?? 'Action failed');
       } else if (okTitle) {
-        Alert.alert(okTitle, okMsg ?? '');
+        showDialog(okTitle, okMsg ?? '');
       }
       await refresh();
     } finally {
@@ -134,12 +140,13 @@ export const PrinterMenuScreen: React.FC<Props> = ({navigation, route}) => {
         />
 
         <ScrollView
+          style={styles.scrollView}
           contentContainerStyle={styles.scroll}
           showsVerticalScrollIndicator={false}>
           <Card style={styles.statusCard}>
             <View style={styles.statusTop}>
               <View style={styles.statusIcon}>
-                <PrinterIcon size={24} color={colors.navy} />
+                <PrinterIcon size={moderateScale(24)} color={colors.navy} />
               </View>
               <View style={styles.statusBody}>
                 <Text style={styles.statusName} numberOfLines={1}>
@@ -343,7 +350,7 @@ function MenuRow({
       onPress={onPress}
       disabled={loading}
       activeOpacity={0.85}>
-      <Icon name={iconName} size={20} color={colors.navy} />
+      <Icon name={iconName} size={moderateScale(20)} color={colors.navy} />
       <View style={styles.menuText}>
         <Text style={styles.menuTitle}>{title}</Text>
         <Text style={styles.menuHint}>{hint}</Text>
@@ -351,7 +358,7 @@ function MenuRow({
       {loading ? (
         <ActivityIndicator color={colors.green} size="small" />
       ) : (
-        <Icon name="chevron-right" size={18} color={colors.muted} />
+        <Icon name="chevron-right" size={moderateScale(18)} color={colors.muted} />
       )}
     </TouchableOpacity>
   );
@@ -361,8 +368,15 @@ function MenuDivider() {
   return <View style={styles.menuDivider} />;
 }
 
+const MENU_ICON_WIDTH = scale(28);
+
 const styles = StyleSheet.create({
   safe: {flex: 1},
+  scrollView: {
+    width: '100%',
+    alignSelf: 'center',
+    maxWidth: maxContentWidth(),
+  },
   scroll: {
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.xxxl,
@@ -377,57 +391,65 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   statusIcon: {
-    width: 44,
-    height: 44,
+    width: moderateScale(44),
+    height: moderateScale(44),
     borderRadius: radii.md,
     backgroundColor: '#EDE9FE',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
-  statusEmoji: {fontSize: 22},
-  statusBody: {flex: 1},
+  statusEmoji: {fontSize: moderateScale(22)},
+  statusBody: {flex: 1, flexShrink: 1},
   statusName: {
-    fontSize: 16,
+    fontSize: moderateScale(16),
     fontWeight: '800',
     color: colors.navy,
+    flexShrink: 1,
   },
   statusType: {
-    marginTop: 2,
-    fontSize: 12,
+    marginTop: verticalScale(2),
+    fontSize: moderateScale(12),
     color: colors.muted,
+    flexShrink: 1,
   },
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
+    gap: scale(5),
+    paddingHorizontal: scale(8),
+    paddingVertical: verticalScale(5),
     borderRadius: radii.pill,
+    flexShrink: 0,
   },
   statusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
+    width: scale(7),
+    height: scale(7),
+    borderRadius: scale(4),
   },
   statusPillText: {
-    fontSize: 10,
+    fontSize: moderateScale(10),
     fontWeight: '800',
+    flexShrink: 1,
   },
   mac: {
     marginTop: spacing.md,
-    fontSize: 12,
+    fontSize: moderateScale(12),
     fontFamily: Platform.select({ios: 'Menlo', android: 'monospace'}),
     color: colors.muted,
+    flexShrink: 1,
   },
   lastSeen: {
-    marginTop: 4,
-    fontSize: 12,
+    marginTop: verticalScale(4),
+    fontSize: moderateScale(12),
     color: colors.muted,
+    flexShrink: 1,
   },
   error: {
     marginTop: spacing.sm,
-    fontSize: 13,
+    fontSize: moderateScale(13),
     color: '#B91C1C',
+    flexShrink: 1,
   },
   toggleCard: {
     padding: spacing.lg,
@@ -438,17 +460,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
   },
-  toggleBody: {flex: 1},
+  toggleBody: {flex: 1, flexShrink: 1},
   toggleTitle: {
-    fontSize: 15,
+    fontSize: moderateScale(15),
     fontWeight: '700',
     color: colors.navy,
+    flexShrink: 1,
   },
   toggleHint: {
-    marginTop: 4,
-    fontSize: 12,
+    marginTop: verticalScale(4),
+    fontSize: moderateScale(12),
     color: colors.muted,
-    lineHeight: 18,
+    lineHeight: moderateScale(18),
+    flexShrink: 1,
   },
   onOffControl: {
     flexDirection: 'row',
@@ -457,10 +481,11 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     overflow: 'hidden',
     backgroundColor: colors.borderLight,
+    flexShrink: 0,
   },
   onOffBtn: {
-    minWidth: 52,
-    paddingVertical: 10,
+    minWidth: scale(52),
+    paddingVertical: verticalScale(10),
     paddingHorizontal: spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -478,7 +503,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.navy,
   },
   onOffBtnText: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     fontWeight: '800',
     color: colors.muted,
     letterSpacing: 0.5,
@@ -493,17 +518,18 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
   },
   toggleStatusLabel: {
-    fontSize: 11,
+    fontSize: moderateScale(11),
     fontWeight: '700',
     color: colors.muted,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   toggleStatusValue: {
-    marginTop: 4,
-    fontSize: 13,
+    marginTop: verticalScale(4),
+    fontSize: moderateScale(13),
     fontWeight: '600',
-    lineHeight: 18,
+    lineHeight: moderateScale(18),
+    flexShrink: 1,
   },
   toggleStatusOn: {
     color: colors.greenDark,
@@ -513,11 +539,12 @@ const styles = StyleSheet.create({
   },
   configHint: {
     marginTop: spacing.sm,
-    fontSize: 12,
+    fontSize: moderateScale(12),
     color: colors.muted,
+    flexShrink: 1,
   },
   menuLabel: {
-    fontSize: 12,
+    fontSize: moderateScale(12),
     fontWeight: '700',
     color: colors.muted,
     textTransform: 'uppercase',
@@ -535,26 +562,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     gap: spacing.md,
   },
-  menuIcon: {fontSize: 20, width: 28, textAlign: 'center'},
-  menuText: {flex: 1},
+  menuIcon: {
+    fontSize: moderateScale(20),
+    width: MENU_ICON_WIDTH,
+    textAlign: 'center',
+  },
+  menuText: {flex: 1, flexShrink: 1},
   menuTitle: {
-    fontSize: 15,
+    fontSize: moderateScale(15),
     fontWeight: '700',
     color: colors.navy,
+    flexShrink: 1,
   },
   menuHint: {
-    marginTop: 2,
-    fontSize: 12,
+    marginTop: verticalScale(2),
+    fontSize: moderateScale(12),
     color: colors.muted,
+    flexShrink: 1,
   },
   menuChevron: {
-    fontSize: 22,
+    fontSize: moderateScale(22),
     color: colors.muted,
     fontWeight: '300',
   },
   menuDivider: {
-    height: 1,
+    height: StyleSheet.hairlineWidth,
     backgroundColor: colors.border,
-    marginLeft: spacing.lg + 28 + spacing.md,
+    marginLeft: spacing.lg + MENU_ICON_WIDTH + spacing.md,
   },
 });

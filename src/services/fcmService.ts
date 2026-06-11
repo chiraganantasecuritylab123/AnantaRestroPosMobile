@@ -1,4 +1,5 @@
-import {Alert, PermissionsAndroid, Platform} from 'react-native';
+import {PermissionsAndroid, Platform} from 'react-native';
+import {showDialog} from '../context/DialogProvider';
 import messaging, {
   type FirebaseMessagingTypes,
 } from '@react-native-firebase/messaging';
@@ -99,7 +100,7 @@ export async function handleIncomingRemoteMessage(
   const stored = await persistPushNotification(message);
 
   if (options?.showForegroundAlert && message.notification) {
-    Alert.alert(
+    showDialog(
       message.notification.title ?? 'Notification',
       message.notification.body ?? '',
     );

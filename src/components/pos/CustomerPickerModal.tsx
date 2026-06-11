@@ -21,12 +21,30 @@ import type {CustomerRef} from '../../features/cartSlice';
 import {
   CheckIcon,
   ChevronLeftIcon,
+  PhoneCountryInput,
   PlusIcon,
   SearchIcon,
   UserIcon,
   CloseIcon,
 } from '../ui';
 import {cardShadow, colors, radii, spacing} from '../../theme';
+import {
+  DEFAULT_COUNTRY,
+  buildAuthPhone,
+  formatCustomerPhone,
+  getPhoneCountryCode,
+  type CountryDialOption,
+} from '../../utils/countryDialCodes';
+import {moderateScale, scale, verticalScale} from '../../utils/responsive';
+
+const HIT_SLOP = {
+  top: scale(8),
+  bottom: scale(8),
+  left: scale(8),
+  right: scale(8),
+};
+const AVATAR_SIZE = scale(44);
+const HEADER_BTN_SIZE = scale(40);
 
 type Props = {
   visible: boolean;
@@ -62,6 +80,7 @@ export const CustomerPickerModal: React.FC<Props> = ({
 }) => {
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState<'list' | 'add'>('list');
+  const [country, setCountry] = useState<CountryDialOption>(DEFAULT_COUNTRY);
   const [form, setForm] = useState({
     phone: '',
     name: '',
@@ -84,6 +103,7 @@ export const CustomerPickerModal: React.FC<Props> = ({
     if (!visible) {
       setQuery('');
       setMode('list');
+      setCountry(DEFAULT_COUNTRY);
     }
   }, [visible]);
 
@@ -94,21 +114,26 @@ export const CustomerPickerModal: React.FC<Props> = ({
   };
 
   const onSaveNew = async () => {
-    if (!form.phone.trim() || !form.name.trim()) {
+    if (!canSaveNew) {
       return;
     }
+    const phoneSaved = formatCustomerPhone(country, form.phone);
+    const phoneNational = buildAuthPhone(country, form.phone);
+    const phoneCountryCode = getPhoneCountryCode(country);
     await addCustomer({
-      phone: form.phone.trim(),
+      phone: phoneNational,
+      phone_country_code: phoneCountryCode,
       name: form.name.trim(),
       email: form.email,
       birthDate: form.birthDate,
       gender: form.gender,
     }).unwrap();
     onSelect({
-      phone: form.phone.trim(),
-      name: `${form.name.trim()} - (${form.phone.trim()})`,
+      phone: phoneSaved,
+      name: `${form.name.trim()} - (${phoneSaved})`,
     });
     setMode('list');
+    setCountry(DEFAULT_COUNTRY);
     setForm({
       phone: '',
       name: '',
@@ -119,7 +144,10 @@ export const CustomerPickerModal: React.FC<Props> = ({
     onClose();
   };
 
-  const canSaveNew = form.phone.trim().length > 0 && form.name.trim().length > 0;
+  const phoneDigits = form.phone.replace(/\D/g, '');
+  const canSaveNew =
+    phoneDigits.length === country.nationalLength &&
+    form.name.trim().length > 0;
 
   return (
     <Modal
@@ -132,9 +160,9 @@ export const CustomerPickerModal: React.FC<Props> = ({
             <TouchableOpacity
               style={styles.headerIconBtn}
               onPress={() => setMode('list')}
-              hitSlop={8}
+              hitSlop={HIT_SLOP}
               accessibilityLabel="Back to customer list">
-              <ChevronLeftIcon size={22} color={colors.navy} />
+              <ChevronLeftIcon size={moderateScale(22)} color={colors.navy} />
             </TouchableOpacity>
           ) : (
             <View style={styles.headerSideSpacer} />
@@ -153,9 +181,9 @@ export const CustomerPickerModal: React.FC<Props> = ({
           <TouchableOpacity
             style={styles.headerIconBtn}
             onPress={onClose}
-            hitSlop={8}
+            hitSlop={HIT_SLOP}
             accessibilityLabel="Close">
-            <CloseIcon size={20} color={colors.navy} />
+            <CloseIcon size={moderateScale(20)} color={colors.navy} />
           </TouchableOpacity>
         </View>
 
@@ -165,7 +193,7 @@ export const CustomerPickerModal: React.FC<Props> = ({
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
             <View style={styles.searchCard}>
               <View style={styles.searchRow}>
-                <SearchIcon size={20} color={colors.muted} />
+                <SearchIcon size={moderateScale(20)} color={colors.muted} />
                 <TextInput
                   style={styles.searchInput}
                   value={query}
@@ -179,9 +207,9 @@ export const CustomerPickerModal: React.FC<Props> = ({
                 {query.length > 0 ? (
                   <TouchableOpacity
                     onPress={() => setQuery('')}
-                    hitSlop={8}
+                    hitSlop={HIT_SLOP}
                     accessibilityLabel="Clear search">
-                    <CloseIcon size={16} color={colors.muted} />
+                    <CloseIcon size={moderateScale(16)} color={colors.muted} />
                   </TouchableOpacity>
                 ) : null}
               </View>
@@ -209,7 +237,7 @@ export const CustomerPickerModal: React.FC<Props> = ({
                     onSelect(null);
                     onClose();
                   }}
-                  hitSlop={8}>
+                  hitSlop={HIT_SLOP}>
                   <Text style={styles.removeBtnText}>Remove</Text>
                 </TouchableOpacity>
               </View>
@@ -220,7 +248,11 @@ export const CustomerPickerModal: React.FC<Props> = ({
               onPress={() => setMode('add')}
               activeOpacity={0.88}>
               <View style={styles.addCustomerIcon}>
-                <PlusIcon size={18} color={colors.green} strokeWidth={2.5} />
+                <PlusIcon
+                  size={moderateScale(18)}
+                  color={colors.green}
+                  strokeWidth={2.5}
+                />
               </View>
               <View style={styles.addCustomerTextWrap}>
                 <Text style={styles.addCustomerTitle}>Add new customer</Text>
@@ -247,7 +279,7 @@ export const CustomerPickerModal: React.FC<Props> = ({
               ListEmptyComponent={
                 <View style={styles.emptyWrap}>
                   <View style={styles.emptyIconCircle}>
-                    <UserIcon size={26} color={colors.muted} />
+                    <UserIcon size={moderateScale(26)} color={colors.muted} />
                   </View>
                   <Text style={styles.emptyTitle}>
                     {query.trim() ? 'No customers found' : 'Search customers'}
@@ -291,7 +323,11 @@ export const CustomerPickerModal: React.FC<Props> = ({
                     </View>
                     {isSel ? (
                       <View style={styles.checkBadge}>
-                        <CheckIcon size={14} color={colors.white} strokeWidth={3} />
+                        <CheckIcon
+                          size={moderateScale(14)}
+                          color={colors.white}
+                          strokeWidth={3}
+                        />
                       </View>
                     ) : (
                       <Text style={styles.rowChevron}>›</Text>
@@ -320,13 +356,18 @@ export const CustomerPickerModal: React.FC<Props> = ({
                   onChangeText={v => setForm(s => ({...s, name: v}))}
                   placeholder="Customer name"
                 />
-                <Field
+                <PhoneCountryInput
                   label="Phone"
-                  value={form.phone}
-                  onChangeText={v => setForm(s => ({...s, phone: v}))}
+                  labelStyle={styles.fieldLabel}
+                  country={country}
+                  onCountryChange={setCountry}
+                  phone={form.phone}
+                  onPhoneChange={digits =>
+                    setForm(s => ({...s, phone: digits}))
+                  }
                   placeholder="10-digit mobile"
-                  keyboardType="phone-pad"
                 />
+                <View style={{marginTop: verticalScale(15)}}/>
                 <Field
                   label="Email (optional)"
                   value={form.email}
@@ -432,47 +473,38 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
-  headerSideSpacer: {width: 40},
+  headerSideSpacer: {width: HEADER_BTN_SIZE},
   headerIconBtn: {
-    width: 40,
-    height: 40,
+    width: HEADER_BTN_SIZE,
+    height: HEADER_BTN_SIZE,
     borderRadius: radii.md,
     backgroundColor: colors.borderLight,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  headerBack: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: colors.navy,
-    marginTop: -2,
-  },
-  headerClose: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.muted,
+    flexShrink: 0,
   },
   headerCenter: {
     flex: 1,
     alignItems: 'center',
     paddingHorizontal: spacing.sm,
+    minWidth: 0,
   },
   kicker: {
-    fontSize: 11,
+    fontSize: moderateScale(11),
     fontWeight: '700',
     color: colors.muted,
     letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
   title: {
-    fontSize: 18,
+    fontSize: moderateScale(18),
     fontWeight: '800',
     color: colors.navy,
-    marginTop: 2,
+    marginTop: verticalScale(2),
   },
   subtitle: {
-    marginTop: 2,
-    fontSize: 12,
+    marginTop: verticalScale(2),
+    fontSize: moderateScale(12),
     color: colors.muted,
     fontWeight: '500',
   },
@@ -494,16 +526,11 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    paddingVertical: 14,
-    fontSize: 15,
+    paddingVertical: verticalScale(14),
+    fontSize: moderateScale(15),
     fontWeight: '500',
     color: colors.navy,
-  },
-  clearSearch: {
-    fontSize: 14,
-    color: colors.mutedLight,
-    fontWeight: '700',
-    padding: 4,
+    minWidth: 0,
   },
   selectedCard: {
     flexDirection: 'row',
@@ -518,46 +545,48 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   selectedAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    borderRadius: AVATAR_SIZE / 2,
     backgroundColor: '#ECFDF5',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   selectedAvatarText: {
-    fontSize: 17,
+    fontSize: moderateScale(17),
     fontWeight: '800',
     color: colors.greenDark,
   },
   selectedBody: {flex: 1, minWidth: 0},
   selectedLabel: {
-    fontSize: 10,
+    fontSize: moderateScale(10),
     fontWeight: '700',
     color: colors.green,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
   selectedName: {
-    fontSize: 15,
+    fontSize: moderateScale(15),
     fontWeight: '800',
     color: colors.navy,
-    marginTop: 2,
+    marginTop: verticalScale(2),
   },
   selectedPhone: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     color: colors.muted,
-    marginTop: 2,
+    marginTop: verticalScale(2),
     fontWeight: '500',
   },
   removeBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    paddingVertical: verticalScale(8),
+    paddingHorizontal: scale(10),
     borderRadius: radii.md,
     backgroundColor: colors.errorBg,
+    flexShrink: 0,
   },
   removeBtnText: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     fontWeight: '800',
     color: colors.error,
   },
@@ -575,34 +604,30 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   addCustomerIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    borderRadius: AVATAR_SIZE / 2,
     backgroundColor: '#ECFDF5',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
-  addCustomerIconText: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: colors.green,
-    marginTop: -2,
-  },
-  addCustomerTextWrap: {flex: 1},
+  addCustomerTextWrap: {flex: 1, minWidth: 0},
   addCustomerTitle: {
-    fontSize: 15,
+    fontSize: moderateScale(15),
     fontWeight: '800',
     color: colors.navy,
   },
   addCustomerHint: {
-    fontSize: 12,
+    fontSize: moderateScale(12),
     color: colors.muted,
-    marginTop: 2,
+    marginTop: verticalScale(2),
   },
   addCustomerChevron: {
-    fontSize: 22,
+    fontSize: moderateScale(22),
     color: colors.mutedLight,
     fontWeight: '600',
+    flexShrink: 0,
   },
   loadingRow: {
     flexDirection: 'row',
@@ -612,7 +637,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   loadingText: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     color: colors.muted,
     fontWeight: '600',
   },
@@ -627,9 +652,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
   },
   emptyIconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: moderateScale(56),
+    height: moderateScale(56),
+    borderRadius: moderateScale(28),
     backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
@@ -637,19 +662,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  emptyIcon: {fontSize: 26},
   emptyTitle: {
-    fontSize: 16,
+    fontSize: moderateScale(16),
     fontWeight: '800',
     color: colors.navy,
     textAlign: 'center',
   },
   emptyText: {
     marginTop: spacing.sm,
-    fontSize: 14,
+    fontSize: moderateScale(14),
     color: colors.muted,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: verticalScale(20),
   },
   row: {
     flexDirection: 'row',
@@ -667,51 +691,49 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0FDF4',
   },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    borderRadius: AVATAR_SIZE / 2,
     backgroundColor: colors.borderLight,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   avatarSelected: {
     backgroundColor: colors.green,
   },
   avatarText: {
-    fontSize: 16,
+    fontSize: moderateScale(16),
     fontWeight: '800',
     color: colors.navy,
   },
   avatarTextSelected: {color: colors.white},
   rowBody: {flex: 1, minWidth: 0},
   rowName: {
-    fontSize: 15,
+    fontSize: moderateScale(15),
     fontWeight: '700',
     color: colors.navy,
   },
   rowPhone: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     color: colors.muted,
-    marginTop: 2,
+    marginTop: verticalScale(2),
     fontWeight: '500',
   },
   checkBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: scale(28),
+    height: scale(28),
+    borderRadius: scale(14),
     backgroundColor: colors.green,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  check: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: colors.white,
+    flexShrink: 0,
   },
   rowChevron: {
-    fontSize: 20,
+    fontSize: moderateScale(20),
     color: colors.mutedLight,
     fontWeight: '600',
+    flexShrink: 0,
   },
   formScroll: {
     padding: spacing.lg,
@@ -725,28 +747,28 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   formIntro: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     color: colors.muted,
-    lineHeight: 18,
+    lineHeight: verticalScale(18),
     marginBottom: spacing.lg,
   },
   field: {marginBottom: spacing.lg},
   fieldLabel: {
-    fontSize: 11,
+    fontSize: moderateScale(11),
     fontWeight: '700',
     color: colors.muted,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
-    marginBottom: 8,
+    marginBottom: verticalScale(8),
   },
   input: {
     backgroundColor: colors.background,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radii.md,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
+    paddingHorizontal: scale(14),
+    paddingVertical: verticalScale(12),
+    fontSize: moderateScale(15),
     fontWeight: '500',
     color: colors.navy,
   },
@@ -756,19 +778,20 @@ const styles = StyleSheet.create({
   },
   genderChip: {
     flex: 1,
-    paddingVertical: 11,
+    paddingVertical: verticalScale(11),
     borderRadius: radii.md,
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: 'center',
     backgroundColor: colors.background,
+    minWidth: 0,
   },
   genderChipOn: {
     borderColor: colors.green,
     backgroundColor: '#ECFDF5',
   },
   genderText: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     fontWeight: '600',
     color: colors.muted,
   },
@@ -787,16 +810,16 @@ const styles = StyleSheet.create({
   },
   saveBtn: {
     backgroundColor: colors.green,
-    paddingVertical: 15,
+    paddingVertical: verticalScale(15),
     borderRadius: radii.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 52,
+    minHeight: verticalScale(52),
   },
   saveBtnDisabled: {opacity: 0.5},
   saveBtnText: {
     color: colors.white,
     fontWeight: '800',
-    fontSize: 16,
+    fontSize: moderateScale(16),
   },
 });

@@ -9,7 +9,8 @@ import {
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import {ChevronRightIcon} from './icons';
-import {colors, radii} from '../../theme';
+import {colors, radii, spacing, typography} from '../../theme';
+import {moderateScale, scale, verticalScale} from '../../utils/responsive';
 
 type Props = {
   title: string;
@@ -49,7 +50,11 @@ export const GradientButton: React.FC<Props> = ({
         <View style={styles.labelRow}>
           <Text style={styles.text}>{title}</Text>
           {showArrow ? (
-            <ChevronRightIcon size={18} color={colors.white} strokeWidth={2.5} />
+            <ChevronRightIcon
+              size={moderateScale(18)}
+              color={colors.white}
+              strokeWidth={2.5}
+            />
           ) : null}
         </View>
       )}
@@ -64,8 +69,8 @@ const styles = StyleSheet.create({
   },
   dim: {opacity: 0.6},
   gradient: {
-    paddingVertical: 16,
-    paddingHorizontal: 24,
+    paddingVertical: verticalScale(16),
+    paddingHorizontal: spacing.xxl,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -73,11 +78,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: scale(6),
   },
   text: {
-    color: colors.white,
-    fontSize: 16,
-    fontWeight: '700',
+    ...typography.button,
   },
 });

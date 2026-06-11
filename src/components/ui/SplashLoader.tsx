@@ -2,18 +2,19 @@ import React, {useEffect, useRef} from 'react';
 import {Animated, Easing, StyleSheet, View} from 'react-native';
 import Svg, {Circle} from 'react-native-svg';
 import {colors} from '../../theme';
+import {moderateScale} from '../../utils/responsive';
 
-const SIZE = 52;
-const STROKE = 4.5;
+const DEFAULT_SIZE = moderateScale(52);
+const STROKE = moderateScale(4.5);
 
 type Props = {
   size?: number;
 };
 
-export const SplashLoader: React.FC<Props> = ({size = SIZE}) => {
+export const SplashLoader: React.FC<Props> = ({size = DEFAULT_SIZE}) => {
   const spin = useRef(new Animated.Value(0)).current;
-  const scale = size / SIZE;
-  const stroke = STROKE * scale;
+  const sizeFactor = size / DEFAULT_SIZE;
+  const stroke = STROKE * sizeFactor;
   const r = (size - stroke) / 2;
   const cx = size / 2;
   const cy = size / 2;

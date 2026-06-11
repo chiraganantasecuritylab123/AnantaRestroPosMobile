@@ -2,11 +2,12 @@ import React from 'react';
 import {StyleSheet, View} from 'react-native';
 import Svg, {Circle, Line, Path, Rect} from 'react-native-svg';
 import {colors} from '../../theme';
+import {moderateScale, scale, verticalScale} from '../../utils/responsive';
 
 type TabName = 'Dashboard' | 'POS' | 'Orders' | 'Profile';
 
-const ICON_SIZE = 28;
-const STROKE = 2;
+const ICON_SIZE = moderateScale(28);
+const STROKE = moderateScale(2);
 
 type IconProps = {
   color: string;
@@ -147,7 +148,7 @@ const styles = StyleSheet.create({
   wrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    height: 36,
-    width: 40,
+    height: verticalScale(36),
+    width: scale(40),
   },
 });

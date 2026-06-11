@@ -13,6 +13,7 @@ export interface CustomerSearchItem {
 
 export interface AddCustomerRequest {
   phone: string;
+  phone_country_code: string;
   name: string;
   email: string;
   birthDate: string;

@@ -8,8 +8,15 @@ import {
 } from 'react-native';
 import {ChevronLeftIcon} from './icons';
 import {cardShadow, colors, radii, spacing, typography} from '../../theme';
+import {moderateScale, scale, verticalScale} from '../../utils/responsive';
 
-const SIDE_MIN_W = 72;
+const SIDE_MIN_W = scale(72);
+const HIT_SLOP = {
+  top: scale(8),
+  bottom: scale(8),
+  left: scale(8),
+  right: scale(8),
+};
 
 export type TopHeaderProps = {
   title: string;
@@ -35,7 +42,7 @@ export const TopHeaderAction: React.FC<TopHeaderActionProps> = ({
 }) => (
   <TouchableOpacity
     onPress={onPress}
-    hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}
+    hitSlop={HIT_SLOP}
     activeOpacity={0.85}
     accessibilityLabel={accessibilityLabel ?? label}>
     <Text style={styles.actionText}>{label}</Text>
@@ -60,10 +67,10 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
           <TouchableOpacity
             style={styles.backBtn}
             onPress={onBack}
-            hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}
+            hitSlop={HIT_SLOP}
             accessibilityLabel="Go back"
             activeOpacity={0.85}>
-            <ChevronLeftIcon size={22} color={colors.navy} />
+            <ChevronLeftIcon size={moderateScale(22)} color={colors.navy} />
           </TouchableOpacity>
         ) : null}
       </View>
@@ -96,18 +103,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.sm,
     paddingBottom: spacing.lg,
-    minHeight: 60,
+    minHeight: verticalScale(60),
   },
   side: {
     minWidth: SIDE_MIN_W,
     justifyContent: 'center',
+    flexShrink: 0,
   },
   sideRight: {
     alignItems: 'flex-end',
   },
   backBtn: {
-    width: 40,
-    height: 40,
+    width: scale(40),
+    height: scale(40),
     borderRadius: radii.md,
     backgroundColor: colors.white,
     borderWidth: 1,
@@ -121,32 +129,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xs,
+    minWidth: 0,
   },
   kicker: {
-    fontSize: 11,
+    fontSize: moderateScale(11),
     fontWeight: '700',
     color: colors.muted,
     letterSpacing: 0.6,
     textTransform: 'uppercase',
-    marginBottom: 2,
+    marginBottom: verticalScale(2),
   },
   title: {
     ...typography.hero,
-    fontSize: 18,
+    fontSize: moderateScale(18),
     fontWeight: '800',
     color: colors.navy,
     textAlign: 'center',
   },
   subtitle: {
-    marginTop: 2,
-    fontSize: 12,
+    marginTop: verticalScale(2),
+    fontSize: moderateScale(12),
     fontWeight: '500',
     color: colors.muted,
     textAlign: 'center',
-    lineHeight: 16,
+    lineHeight: verticalScale(16),
   },
   actionText: {
-    fontSize: 15,
+    fontSize: moderateScale(15),
     fontWeight: '700',
     color: colors.green,
     textAlign: 'right',

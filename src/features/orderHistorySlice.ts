@@ -27,9 +27,12 @@ const orderHistorySlice = createSlice({
     addOrderHistoryItem(state, action: PayloadAction<OrderHistoryItem>) {
       state.items.unshift(action.payload);
     },
+    resetOrderHistory(state) {
+      state.items = [];
+    },
   },
 });
 
-export const {addOrderHistoryItem} = orderHistorySlice.actions;
+export const {addOrderHistoryItem, resetOrderHistory} = orderHistorySlice.actions;
 export const orderHistoryReducer = orderHistorySlice.reducer;
 

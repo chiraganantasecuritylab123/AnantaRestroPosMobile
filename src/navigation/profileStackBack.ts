@@ -14,5 +14,12 @@ export function handleProfileStackBack(
     });
     return;
   }
-  navigation.goBack();
+  if (navigation.canGoBack()) {
+    navigation.goBack();
+    return;
+  }
+  navigation.reset({
+    index: 0,
+    routes: [{name: 'ProfileMain'}],
+  });
 }

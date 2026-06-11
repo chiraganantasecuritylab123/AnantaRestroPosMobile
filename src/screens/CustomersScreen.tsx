@@ -1,7 +1,6 @@
-import React, {useMemo, useState} from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -13,31 +12,47 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
-import type {NativeStackScreenProps} from '@react-navigation/native-stack';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
   useAddCustomerMutation,
   useSearchCustomersQuery,
   type CustomerSearchItem,
 } from '../services/customerApi';
-import type {ProfileStackParamList} from '../navigation/types';
-import {handleProfileStackBack} from '../navigation/profileStackBack';
+import type { ProfileStackParamList } from '../navigation/types';
+import { handleProfileStackBack } from '../navigation/profileStackBack';
+import { showDialog } from '../context/DialogProvider';
 import {
   Card,
   CloseIcon,
+  PhoneCountryInput,
   SearchIcon,
   TopHeader,
   TopHeaderAction,
   UserIcon,
 } from '../components/ui';
-import {cardShadow, colors, radii, spacing} from '../theme';
+import { cardShadow, colors, radii, spacing } from '../theme';
+import {
+  DEFAULT_COUNTRY,
+  buildAuthPhone,
+  formatCustomerPhone,
+  getPhoneCountryCode,
+  type CountryDialOption,
+} from '../utils/countryDialCodes';
+import {
+  isTablet,
+  maxContentWidth,
+  moderateScale,
+  scale,
+  verticalScale,
+} from '../utils/responsive';
 
 type Props = NativeStackScreenProps<ProfileStackParamList, 'Customers'>;
 
 const GENDERS = [
-  {key: 'male' as const, label: 'Male'},
-  {key: 'female' as const, label: 'Female'},
-  {key: 'other' as const, label: 'Other'},
+  { key: 'male' as const, label: 'Male' },
+  { key: 'female' as const, label: 'Female' },
+  { key: 'other' as const, label: 'Other' },
 ];
 
 function customerInitial(name: string) {
@@ -45,9 +60,10 @@ function customerInitial(name: string) {
   return ch ? ch.toUpperCase() : '?';
 }
 
-export const CustomersScreen: React.FC<Props> = ({navigation, route}) => {
+export const CustomersScreen: React.FC<Props> = ({ navigation, route }) => {
   const [query, setQuery] = useState('');
   const [addVisible, setAddVisible] = useState(false);
+  const [country, setCountry] = useState<CountryDialOption>(DEFAULT_COUNTRY);
   const [form, setForm] = useState({
     phone: '',
     name: '',
@@ -57,20 +73,22 @@ export const CustomersScreen: React.FC<Props> = ({navigation, route}) => {
   });
 
   const trimmedQuery = query.trim();
-  const {data: customers = [], isFetching} = useSearchCustomersQuery(
+  const { data: customers = [], isFetching } = useSearchCustomersQuery(
     trimmedQuery,
-    {skip: trimmedQuery.length < 1},
+    { skip: trimmedQuery.length < 1 },
   );
-  const [addCustomer, {isLoading: adding}] = useAddCustomerMutation();
+  const [addCustomer, { isLoading: adding }] = useAddCustomerMutation();
 
+  const phoneDigits = form.phone.replace(/\D/g, '');
   const canSaveNew =
-    form.phone.trim().length > 0 && form.name.trim().length > 0;
+    phoneDigits.length === country.nationalLength &&
+    form.name.trim().length > 0;
 
   const listHeader = useMemo(
     () => (
       <View style={styles.listHeader}>
         <View style={styles.searchRow}>
-          <SearchIcon size={20} color={colors.muted} />
+          <SearchIcon size={moderateScale(20)} color={colors.muted} />
           <TextInput
             style={styles.searchInput}
             value={query}
@@ -86,7 +104,7 @@ export const CustomersScreen: React.FC<Props> = ({navigation, route}) => {
               onPress={() => setQuery('')}
               hitSlop={8}
               accessibilityLabel="Clear search">
-              <CloseIcon size={16} color={colors.muted} />
+              <CloseIcon size={moderateScale(16)} color={colors.muted} />
             </TouchableOpacity>
           ) : null}
         </View>
@@ -102,6 +120,7 @@ export const CustomersScreen: React.FC<Props> = ({navigation, route}) => {
   );
 
   const resetForm = () => {
+    setCountry(DEFAULT_COUNTRY);
     setForm({
       phone: '',
       name: '',
@@ -116,9 +135,10 @@ export const CustomersScreen: React.FC<Props> = ({navigation, route}) => {
       return;
     }
     try {
-      const phoneSaved = form.phone.trim();
+      const phoneSaved = formatCustomerPhone(country, form.phone);
       const res = await addCustomer({
-        phone: phoneSaved,
+        phone: buildAuthPhone(country, form.phone),
+        phone_country_code: getPhoneCountryCode(country),
         name: form.name.trim(),
         email: form.email.trim(),
         birthDate: form.birthDate,
@@ -127,17 +147,17 @@ export const CustomersScreen: React.FC<Props> = ({navigation, route}) => {
       setAddVisible(false);
       resetForm();
       setQuery(phoneSaved);
-      Alert.alert('Customer added', res.message ?? 'Customer saved.');
+      showDialog('Customer added', res.message ?? 'Customer saved.');
     } catch (e: unknown) {
-      const err = e as {data?: {message?: string}; error?: string};
-      Alert.alert(
+      const err = e as { data?: { message?: string }; error?: string };
+      showDialog(
         'Could not save',
         err?.data?.message ?? err?.error ?? 'Please try again.',
       );
     }
   };
 
-  const renderCustomer = ({item}: {item: CustomerSearchItem}) => (
+  const renderCustomer = ({ item }: { item: CustomerSearchItem }) => (
     <Card style={styles.rowCard}>
       <View style={styles.avatar}>
         <Text style={styles.avatarText}>{customerInitial(item.name)}</Text>
@@ -176,13 +196,20 @@ export const CustomersScreen: React.FC<Props> = ({navigation, route}) => {
         keyExtractor={item => `${item.phone}-${item.created_at}`}
         renderItem={renderCustomer}
         ListHeaderComponent={listHeader}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[
+          styles.listContent,
+          isTablet() && {
+            maxWidth: maxContentWidth(),
+            width: '100%',
+            alignSelf: 'center',
+          },
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.emptyWrap}>
             <View style={styles.emptyIconCircle}>
-              <UserIcon size={28} color={colors.muted} />
+              <UserIcon size={moderateScale(28)} color={colors.muted} />
             </View>
             <Text style={styles.emptyTitle}>
               {trimmedQuery ? 'No customers found' : 'Search customers'}
@@ -208,7 +235,7 @@ export const CustomersScreen: React.FC<Props> = ({navigation, route}) => {
                 resetForm();
               }}
               hitSlop={8}>
-              <CloseIcon size={22} color={colors.navy} />
+              <CloseIcon size={moderateScale(22)} color={colors.navy} />
             </TouchableOpacity>
             <Text style={styles.modalTitle}>Add customer</Text>
             <View style={styles.modalHeaderSpacer} />
@@ -218,27 +245,38 @@ export const CustomersScreen: React.FC<Props> = ({navigation, route}) => {
             style={styles.flex}
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
             <ScrollView
-              contentContainerStyle={styles.formScroll}
+              contentContainerStyle={[
+                styles.formScroll,
+                isTablet() && {
+                  maxWidth: maxContentWidth(),
+                  width: '100%',
+                  alignSelf: 'center',
+                },
+              ]}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}>
               <View style={[styles.formCard, cardShadow]}>
                 <FormField
                   label="Full name"
                   value={form.name}
-                  onChangeText={v => setForm(s => ({...s, name: v}))}
+                  onChangeText={v => setForm(s => ({ ...s, name: v }))}
                   placeholder="Customer name"
                 />
-                <FormField
+                <PhoneCountryInput
                   label="Phone"
-                  value={form.phone}
-                  onChangeText={v => setForm(s => ({...s, phone: v}))}
-                  placeholder="Mobile number"
-                  keyboardType="phone-pad"
+                  labelStyle={styles.fieldLabel}
+                  country={country}
+                  onCountryChange={setCountry}
+                  phone={form.phone}
+                  onPhoneChange={digits =>
+                    setForm(s => ({ ...s, phone: digits }))
+                  }
                 />
+                <View style={{ marginTop: verticalScale(15) }} />
                 <FormField
                   label="Email (optional)"
                   value={form.email}
-                  onChangeText={v => setForm(s => ({...s, email: v}))}
+                  onChangeText={v => setForm(s => ({ ...s, email: v }))}
                   placeholder="email@example.com"
                   keyboardType="email-address"
                   autoCapitalize="none"
@@ -256,7 +294,7 @@ export const CustomersScreen: React.FC<Props> = ({navigation, route}) => {
                           active && styles.genderChipOn,
                         ]}
                         onPress={() =>
-                          setForm(s => ({...s, gender: g.key}))
+                          setForm(s => ({ ...s, gender: g.key }))
                         }
                         activeOpacity={0.85}>
                         <Text
@@ -328,8 +366,8 @@ function FormField({
 }
 
 const styles = StyleSheet.create({
-  safe: {flex: 1, backgroundColor: colors.background},
-  flex: {flex: 1},
+  safe: { flex: 1, backgroundColor: colors.background },
+  flex: { flex: 1 },
   listContent: {
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xxxl,
@@ -349,11 +387,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     paddingHorizontal: spacing.md,
-    paddingVertical: 12,
+    paddingVertical: verticalScale(12),
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
+    fontSize: moderateScale(16),
     color: colors.navy,
     paddingVertical: 0,
   },
@@ -364,7 +402,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xs,
   },
   loadingText: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     color: colors.muted,
     fontWeight: '600',
   },
@@ -376,44 +414,44 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: scale(44),
+    height: scale(44),
+    borderRadius: scale(22),
     backgroundColor: '#E8F8ED',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
-    fontSize: 17,
+    fontSize: moderateScale(17),
     fontWeight: '800',
     color: colors.green,
   },
-  rowBody: {flex: 1, minWidth: 0},
+  rowBody: { flex: 1, minWidth: 0 },
   rowName: {
-    fontSize: 16,
+    fontSize: moderateScale(16),
     fontWeight: '700',
     color: colors.navy,
   },
   rowPhone: {
-    marginTop: 2,
-    fontSize: 14,
+    marginTop: verticalScale(2),
+    fontSize: moderateScale(14),
     fontWeight: '600',
     color: colors.muted,
   },
   rowMeta: {
-    marginTop: 2,
-    fontSize: 12,
+    marginTop: verticalScale(2),
+    fontSize: moderateScale(12),
     color: colors.mutedLight,
   },
   memberBadge: {
-    marginTop: 6,
+    marginTop: verticalScale(6),
     alignSelf: 'flex-start',
-    fontSize: 11,
+    fontSize: moderateScale(11),
     fontWeight: '800',
     color: colors.green,
     backgroundColor: '#DCFCE7',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: scale(8),
+    paddingVertical: verticalScale(3),
     borderRadius: radii.sm,
     overflow: 'hidden',
   },
@@ -423,28 +461,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
   },
   emptyIconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: scale(64),
+    height: scale(64),
+    borderRadius: scale(32),
     backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.md,
   },
   emptyTitle: {
-    fontSize: 17,
+    fontSize: moderateScale(17),
     fontWeight: '800',
     color: colors.navy,
     textAlign: 'center',
   },
   emptyText: {
     marginTop: spacing.sm,
-    fontSize: 14,
+    fontSize: moderateScale(14),
     color: colors.muted,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: moderateScale(20),
   },
-  modalSafe: {flex: 1, backgroundColor: colors.background},
+  modalSafe: { flex: 1, backgroundColor: colors.background },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -456,11 +494,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
   },
   modalTitle: {
-    fontSize: 17,
+    fontSize: moderateScale(17),
     fontWeight: '800',
     color: colors.navy,
   },
-  modalHeaderSpacer: {width: 22},
+  modalHeaderSpacer: { width: scale(22) },
   formScroll: {
     padding: spacing.lg,
     paddingBottom: spacing.xl,
@@ -473,29 +511,29 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     marginTop: spacing.sm,
-    fontSize: 13,
+    fontSize: moderateScale(13),
     fontWeight: '700',
     color: colors.navy,
   },
   fieldInput: {
-    marginTop: 6,
+    marginTop: verticalScale(6),
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radii.md,
     paddingHorizontal: spacing.md,
-    paddingVertical: 12,
-    fontSize: 16,
+    paddingVertical: verticalScale(12),
+    fontSize: moderateScale(16),
     color: colors.navy,
     backgroundColor: colors.white,
   },
   genderRow: {
     flexDirection: 'row',
     gap: spacing.sm,
-    marginTop: 6,
+    marginTop: verticalScale(6),
   },
   genderChip: {
     flex: 1,
-    paddingVertical: 10,
+    paddingVertical: verticalScale(10),
     borderRadius: radii.md,
     borderWidth: 1,
     borderColor: colors.border,
@@ -507,7 +545,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#E8F8ED',
   },
   genderText: {
-    fontSize: 14,
+    fontSize: moderateScale(14),
     fontWeight: '600',
     color: colors.muted,
   },
@@ -524,15 +562,15 @@ const styles = StyleSheet.create({
   saveBtn: {
     backgroundColor: colors.green,
     borderRadius: radii.lg,
-    paddingVertical: 14,
+    paddingVertical: verticalScale(14),
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 48,
+    minHeight: verticalScale(48),
   },
-  saveBtnDisabled: {opacity: 0.55},
+  saveBtnDisabled: { opacity: 0.55 },
   saveBtnText: {
     color: colors.white,
-    fontSize: 16,
+    fontSize: moderateScale(16),
     fontWeight: '800',
   },
 });

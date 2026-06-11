@@ -1,42 +1,44 @@
 import {TextStyle} from 'react-native';
 import {colors} from './colors';
+import {fontFamily} from './fonts';
+import {moderateScale, verticalScale} from '../utils/responsive';
 
 export const typography = {
   hero: {
-    fontSize: 28,
-    fontWeight: '800',
+    fontSize: moderateScale(28),
+    fontFamily: fontFamily.black,
     color: colors.navy,
     letterSpacing: -0.5,
   } as TextStyle,
   title: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: moderateScale(22),
+    fontFamily: fontFamily.bold,
     color: colors.navy,
   } as TextStyle,
   subtitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: moderateScale(16),
+    fontFamily: fontFamily.medium,
     color: colors.navy,
   } as TextStyle,
   body: {
-    fontSize: 15,
-    fontWeight: '400',
+    fontSize: moderateScale(15),
+    fontFamily: fontFamily.regular,
     color: colors.muted,
-    lineHeight: 22,
+    lineHeight: verticalScale(22),
   } as TextStyle,
   caption: {
-    fontSize: 13,
-    fontWeight: '500',
+    fontSize: moderateScale(13),
+    fontFamily: fontFamily.medium,
     color: colors.muted,
   } as TextStyle,
   label: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: moderateScale(13),
+    fontFamily: fontFamily.bold,
     color: colors.navy,
   } as TextStyle,
   button: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: moderateScale(16),
+    fontFamily: fontFamily.bold,
     color: colors.white,
   } as TextStyle,
 };

@@ -11,6 +11,8 @@ export {
   ChevronLeftIcon,
   ChevronRightIcon,
   CloseIcon,
+  EditIcon,
+  TrashIcon,
   GlobeIcon,
   ClipboardIcon,
   ClockIcon,

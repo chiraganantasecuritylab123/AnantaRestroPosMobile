@@ -1,7 +1,6 @@
 import React, {useCallback, useEffect, useState} from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Linking,
   Platform,
@@ -13,6 +12,7 @@ import {
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
+import {showDialog} from '../context/DialogProvider';
 import {
   connectPrinter,
   disconnectPrinter,
@@ -30,6 +30,12 @@ import {handleProfileStackBack} from '../navigation/profileStackBack';
 import type {PrinterConnectionStatus, PrinterDevice} from '../types/printer';
 import {Card, ScreenBackground, TopHeader, TopHeaderAction} from '../components/ui';
 import {colors, radii, spacing, typography} from '../theme';
+import {
+  maxContentWidth,
+  moderateScale,
+  scale,
+  verticalScale,
+} from '../utils/responsive';
 
 type Props = NativeStackScreenProps<ProfileStackParamList, 'PrinterSettings'>;
 
@@ -92,13 +98,13 @@ export const PrinterSettingsScreen: React.FC<Props> = ({navigation, route}) => {
     if (result.ok) {
       setDevices(result.data);
       if (!result.data.length) {
-        Alert.alert(
+        showDialog(
           'No printers found',
           'Pair your 58mm printer in Android Bluetooth settings, then scan again.',
         );
       }
     } else {
-      Alert.alert('Scan failed', result.error);
+      showDialog('Scan failed', result.error);
     }
     await refresh();
   }, [checkPermissions, refresh]);
@@ -113,11 +119,11 @@ export const PrinterSettingsScreen: React.FC<Props> = ({navigation, route}) => {
     const result = await connectPrinter(device.address, device.name);
     setConnectingAddress(null);
     if (result.ok) {
-      Alert.alert('Connected', `${device.name} is ready.`);
+      showDialog('Connected', `${device.name} is ready.`);
       await refresh();
       await loadBondedOnly();
     } else {
-      Alert.alert('Connection failed', result.error ?? 'Could not connect.');
+      showDialog('Connection failed', result.error ?? 'Could not connect.');
     }
   };
 
@@ -126,15 +132,15 @@ export const PrinterSettingsScreen: React.FC<Props> = ({navigation, route}) => {
     const result = await reconnectLastPrinter();
     setConnectingAddress(null);
     if (result.ok) {
-      Alert.alert('Connected', 'Reconnected to saved printer.');
+      showDialog('Connected', 'Reconnected to saved printer.');
     } else {
-      Alert.alert('Reconnect failed', result.error ?? 'Could not reconnect.');
+      showDialog('Reconnect failed', result.error ?? 'Could not reconnect.');
     }
     await refresh();
   };
 
   const onDisconnect = () => {
-    Alert.alert('Disconnect', 'Disconnect from the current printer?', [
+    showDialog('Disconnect', 'Disconnect from the current printer?', [
       {text: 'Cancel', style: 'cancel'},
       {
         text: 'Disconnect',
@@ -147,7 +153,7 @@ export const PrinterSettingsScreen: React.FC<Props> = ({navigation, route}) => {
   };
 
   const onForget = () => {
-    Alert.alert(
+    showDialog(
       'Change printer',
       'Disconnect and remove the saved printer? You can select another device below.',
       [
@@ -170,12 +176,12 @@ export const PrinterSettingsScreen: React.FC<Props> = ({navigation, route}) => {
     const result = await printTestReceipt();
     setTestPrinting(false);
     if (result.ok) {
-      Alert.alert(
+      showDialog(
         'Test print sent',
         'Check your thermal printer for the test receipt.',
       );
     } else {
-      Alert.alert('Test print failed', result.error ?? 'Could not print.');
+      showDialog('Test print failed', result.error ?? 'Could not print.');
     }
   };
 
@@ -185,7 +191,7 @@ export const PrinterSettingsScreen: React.FC<Props> = ({navigation, route}) => {
       await checkPermissions();
       await runScan();
     } else {
-      Alert.alert('Bluetooth off', 'Turn on Bluetooth to scan for printers.');
+      showDialog('Bluetooth off', 'Turn on Bluetooth to scan for printers.');
     }
   };
 
@@ -211,6 +217,7 @@ export const PrinterSettingsScreen: React.FC<Props> = ({navigation, route}) => {
           }
         />
 
+        <View style={styles.contentWrap}>
         {permissionHint ? (
           <Card style={styles.banner}>
             <Text style={styles.bannerText}>{permissionHint}</Text>
@@ -318,6 +325,7 @@ export const PrinterSettingsScreen: React.FC<Props> = ({navigation, route}) => {
         </View>
 
         <FlatList
+          style={styles.listScroll}
           data={devices}
           keyExtractor={item => item.address}
           contentContainerStyle={styles.list}
@@ -378,6 +386,7 @@ export const PrinterSettingsScreen: React.FC<Props> = ({navigation, route}) => {
             );
           }}
         />
+        </View>
       </SafeAreaView>
     </ScreenBackground>
   );
@@ -385,6 +394,13 @@ export const PrinterSettingsScreen: React.FC<Props> = ({navigation, route}) => {
 
 const styles = StyleSheet.create({
   safe: {flex: 1},
+  contentWrap: {
+    flex: 1,
+    width: '100%',
+    alignSelf: 'center',
+    maxWidth: maxContentWidth(),
+  },
+  listScroll: {flex: 1},
   banner: {
     marginHorizontal: spacing.xl,
     marginBottom: spacing.md,
@@ -393,9 +409,10 @@ const styles = StyleSheet.create({
     borderColor: '#FCD34D',
   },
   bannerText: {
-    fontSize: 14,
+    fontSize: moderateScale(14),
     color: '#92400E',
-    lineHeight: 20,
+    lineHeight: moderateScale(20),
+    flexShrink: 1,
   },
   bannerActions: {
     flexDirection: 'row',
@@ -405,13 +422,13 @@ const styles = StyleSheet.create({
   },
   bannerBtn: {
     paddingHorizontal: spacing.md,
-    paddingVertical: 8,
+    paddingVertical: verticalScale(8),
     borderRadius: radii.md,
     backgroundColor: colors.navy,
   },
   bannerBtnText: {
     color: colors.white,
-    fontSize: 13,
+    fontSize: moderateScale(13),
     fontWeight: '700',
   },
   currentCard: {
@@ -420,22 +437,24 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   sectionLabel: {
-    fontSize: 11,
+    fontSize: moderateScale(11),
     fontWeight: '700',
     color: colors.muted,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   currentName: {
-    marginTop: 6,
-    fontSize: 18,
+    marginTop: verticalScale(6),
+    fontSize: moderateScale(18),
     fontWeight: '800',
     color: colors.navy,
+    flexShrink: 1,
   },
   currentMeta: {
-    marginTop: 4,
-    fontSize: 13,
+    marginTop: verticalScale(4),
+    fontSize: moderateScale(13),
     color: colors.muted,
+    flexShrink: 1,
   },
   currentActions: {
     marginTop: spacing.lg,
@@ -444,31 +463,31 @@ const styles = StyleSheet.create({
   primaryBtn: {
     backgroundColor: colors.green,
     borderRadius: radii.md,
-    paddingVertical: 12,
+    paddingVertical: verticalScale(12),
     alignItems: 'center',
   },
   testBtn: {
     backgroundColor: colors.navy,
     borderRadius: radii.md,
-    paddingVertical: 12,
+    paddingVertical: verticalScale(12),
     alignItems: 'center',
     marginTop: spacing.xs,
   },
   primaryBtnText: {
     color: colors.white,
-    fontSize: 14,
+    fontSize: moderateScale(14),
     fontWeight: '800',
   },
   outlineBtn: {
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radii.md,
-    paddingVertical: 12,
+    paddingVertical: verticalScale(12),
     alignItems: 'center',
     backgroundColor: colors.white,
   },
   outlineBtnText: {
-    fontSize: 14,
+    fontSize: moderateScale(14),
     fontWeight: '700',
     color: colors.navy,
   },
@@ -481,22 +500,24 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: moderateScale(16),
     fontWeight: '800',
     color: colors.navy,
+    flexShrink: 1,
   },
   scanBtn: {
-    minWidth: 72,
+    minWidth: scale(72),
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
+    paddingVertical: verticalScale(8),
     paddingHorizontal: spacing.md,
     borderRadius: radii.md,
     borderWidth: 1,
     borderColor: colors.green,
+    flexShrink: 0,
   },
   scanBtnText: {
-    fontSize: 14,
+    fontSize: moderateScale(14),
     fontWeight: '800',
     color: colors.green,
   },
@@ -505,10 +526,11 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxxl,
   },
   listHint: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     color: colors.muted,
-    lineHeight: 20,
+    lineHeight: moderateScale(20),
     marginBottom: spacing.md,
+    flexShrink: 1,
   },
   deviceRow: {
     flexDirection: 'row',
@@ -524,47 +546,54 @@ const styles = StyleSheet.create({
     borderColor: colors.green,
     backgroundColor: '#F0FDF4',
   },
-  deviceBody: {flex: 1, paddingRight: spacing.sm},
+  deviceBody: {flex: 1, paddingRight: spacing.sm, flexShrink: 1},
   deviceName: {
-    fontSize: 16,
+    fontSize: moderateScale(16),
     fontWeight: '700',
     color: colors.navy,
+    flexShrink: 1,
   },
   deviceAddr: {
-    marginTop: 2,
-    fontSize: 12,
+    marginTop: verticalScale(2),
+    fontSize: moderateScale(12),
     fontFamily: Platform.select({ios: 'Menlo', android: 'monospace'}),
     color: colors.muted,
+    flexShrink: 1,
   },
   deviceTags: {
-    marginTop: 4,
-    fontSize: 12,
+    marginTop: verticalScale(4),
+    fontSize: moderateScale(12),
     color: colors.muted,
+    flexShrink: 1,
   },
   connectedBadge: {
-    fontSize: 12,
+    fontSize: moderateScale(12),
     fontWeight: '800',
     color: colors.green,
+    flexShrink: 0,
   },
   connectLink: {
-    fontSize: 14,
+    fontSize: moderateScale(14),
     fontWeight: '700',
     color: colors.green,
+    flexShrink: 0,
   },
   empty: {
     padding: spacing.xl,
     alignItems: 'center',
   },
   emptyTitle: {
-    fontSize: 17,
+    fontSize: moderateScale(17),
     fontWeight: '800',
     color: colors.navy,
+    flexShrink: 1,
   },
   emptyText: {
     marginTop: spacing.sm,
     textAlign: 'center',
-    fontSize: 14,
+    fontSize: moderateScale(14),
     color: colors.muted,
-    lineHeight: 22,
+    lineHeight: moderateScale(22),
+    flexShrink: 1,
   },
 });

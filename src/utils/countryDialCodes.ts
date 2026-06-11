@@ -35,16 +35,29 @@ export function formatNationalPhoneDisplay(
   return d;
 }
 
-/** Phone payload for auth API (India keeps 10-digit local format). */
+/** Digits-only country calling code for auth API (e.g. "91"). */
+export function getPhoneCountryCode(country: CountryDialOption): string {
+  return country.dialCode.replace(/\D/g, '');
+}
+
+/** National phone digits for auth API (country code sent separately). */
 export function buildAuthPhone(
+  _country: CountryDialOption,
+  localDigits: string,
+): string {
+  return localDigits.replace(/\D/g, '');
+}
+
+/** Full customer phone for API/storage (India: national digits only). */
+export function formatCustomerPhone(
   country: CountryDialOption,
   localDigits: string,
 ): string {
-  if (country.dialCode === '+91') {
-    return localDigits;
+  const digits = localDigits.replace(/\D/g, '');
+  if (country.code === 'IN') {
+    return digits;
   }
-  const code = country.dialCode.replace(/\D/g, '');
-  return `${code}${localDigits}`;
+  return `${getPhoneCountryCode(country)}${digits}`;
 }
 
 export function maskAuthPhone(
@@ -53,4 +66,43 @@ export function maskAuthPhone(
 ): string {
   const display = formatNationalPhoneDisplay(localDigits, country.nationalLength);
   return `${country.dialCode} ${display}`.trim();
+}
+
+/** Display profile/customer phone with dial code (e.g. +91 98765 43210). */
+export function formatUserPhoneDisplay(
+  phone: string | null | undefined,
+  phoneCountryCode: string | null | undefined,
+): string {
+  const raw = phone?.trim();
+  if (!raw) {
+    return '—';
+  }
+
+  const nationalDigits = raw.replace(/\D/g, '');
+  if (!nationalDigits) {
+    return '—';
+  }
+
+  const codeDigits = phoneCountryCode?.replace(/\D/g, '') ?? '';
+  const country =
+    COUNTRY_DIAL_OPTIONS.find(c => getPhoneCountryCode(c) === codeDigits) ??
+    null;
+
+  if (country) {
+    const local =
+      nationalDigits.length > country.nationalLength
+        ? nationalDigits.slice(-country.nationalLength)
+        : nationalDigits;
+    return `${country.dialCode} ${formatNationalPhoneDisplay(local, country.nationalLength)}`;
+  }
+
+  if (codeDigits) {
+    return `+${codeDigits} ${formatNationalPhoneDisplay(nationalDigits, nationalDigits.length === 10 ? 10 : nationalDigits.length)}`;
+  }
+
+  if (raw.startsWith('+')) {
+    return raw;
+  }
+
+  return formatNationalPhoneDisplay(nationalDigits, nationalDigits.length === 10 ? 10 : nationalDigits.length);
 }

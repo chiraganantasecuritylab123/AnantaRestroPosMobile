@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   RefreshControl,
   Image,
-  Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useFocusEffect, useNavigation} from '@react-navigation/native';
@@ -26,19 +26,24 @@ import {useAppMenu} from '../context/AppMenuContext';
 import {ConfirmDialog, Icon, PaymentBadge} from '../components/ui';
 import type {IconName} from '../components/ui';
 import {colors, cardShadow, radii, spacing} from '../theme';
+import {
+  isTablet,
+  maxContentWidth,
+  moderateScale,
+  scale,
+  verticalScale,
+} from '../utils/responsive';
 
 type DashboardNav = NativeStackNavigationProp<
   DashboardStackParamList,
   'DashboardMain'
 >;
 
-const SCREEN_W = Dimensions.get('window').width;
 const H_PAD = spacing.xl;
 /** Sales hero — deep forest green from design reference */
 const HERO_BG = '#006B3C';
 const HERO_BADGE_BG = '#00522E';
-const QUICK_GAP = 10;
-const QUICK_CARD_W = (SCREEN_W - H_PAD * 2 - QUICK_GAP * 3) / 4;
+const QUICK_GAP = scale(10);
 
 const ORDER_ICON_TINTS = ['#DCFCE7', '#FFEDD5', '#EDE9FE', '#DBEAFE'];
 const PREVIEW_ITEM_LIMIT = 2;
@@ -211,6 +216,12 @@ export const DashboardScreen: React.FC = () => {
     });
   }, []);
 
+  const {width: windowWidth} = useWindowDimensions();
+  const quickCardW = useMemo(() => {
+    const contentW = isTablet() ? maxContentWidth() : windowWidth;
+    return (contentW - H_PAD * 2 - QUICK_GAP * 3) / 4;
+  }, [windowWidth]);
+
   const firstName = user?.name?.split(' ')?.[0] ?? 'Waiter';
   const initials = (user?.name ?? 'W')
     .split(' ')
@@ -222,7 +233,8 @@ export const DashboardScreen: React.FC = () => {
   const goProfile = () =>
     tabNavigation?.navigate('Profile', {screen: 'ProfileMain'});
   const goPos = () => tabNavigation?.navigate('POS', {screen: 'PosHome'});
-  const goOrders = () => tabNavigation?.navigate('Orders');
+  const goOrders = () =>
+    tabNavigation?.navigate('Orders', {screen: 'OrdersMain'});
   const goNotifications = () => navigation.navigate('Notifications');
 
   const quickActions: QuickAction[] = [
@@ -234,12 +246,17 @@ export const DashboardScreen: React.FC = () => {
       onPress: goPos,
     },
     {
-      key: 'products',
-      label: 'Products',
+      key: 'menu-items',
+      label: 'Menu Items',
       iconName: 'package',
       bg: '#FFEDD5',
       onPress: () =>
-        tabNavigation?.navigate('Profile', {screen: 'MenuItemsList'}),
+        tabNavigation?.navigate('Profile', {
+          state: {
+            routes: [{name: 'MenuItemsList', params: {fromSideMenu: true}}],
+            index: 0,
+          },
+        }),
     },
     {
       key: 'customers',
@@ -247,12 +264,17 @@ export const DashboardScreen: React.FC = () => {
       iconName: 'users',
       bg: '#EDE9FE',
       onPress: () =>
-        tabNavigation?.navigate('Profile', {screen: 'Customers'}),
+        tabNavigation?.navigate('Profile', {
+          state: {
+            routes: [{name: 'Customers', params: {fromSideMenu: true}}],
+            index: 0,
+          },
+        }),
     },
     {
-      key: 'bills',
-      label: 'Bills',
-      iconName: 'receipt',
+      key: 'orders',
+      label: 'Orders',
+      iconName: 'clipboard',
       bg: '#DBEAFE',
       onPress: goOrders,
     },
@@ -267,7 +289,7 @@ export const DashboardScreen: React.FC = () => {
             onPress={openMenu}
             activeOpacity={0.8}
             accessibilityLabel="Open menu">
-            <Icon name="menu" size={22} color={colors.navy} />
+            <Icon name="menu" size={moderateScale(22)} color={colors.navy} />
           </TouchableOpacity>
           <Image
             source={require('../assets/logo-dark.png')}
@@ -280,7 +302,7 @@ export const DashboardScreen: React.FC = () => {
               onPress={goNotifications}
               activeOpacity={0.8}
               accessibilityLabel="Notifications">
-              <Icon name="bell" size={22} color={colors.navy} />
+              <Icon name="bell" size={moderateScale(22)} color={colors.navy} />
               {notificationUnreadCount > 0 ? (
                 <View style={styles.badge} accessibilityLabel={`${notificationUnreadCount} unread notifications`}>
                   <Text style={styles.badgeText}>
@@ -296,7 +318,14 @@ export const DashboardScreen: React.FC = () => {
 
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            isTablet() && {
+              maxWidth: maxContentWidth(),
+              width: '100%',
+              alignSelf: 'center',
+            },
+          ]}
           refreshControl={
             <RefreshControl
               refreshing={isFetching || ordersFetching}
@@ -342,7 +371,7 @@ export const DashboardScreen: React.FC = () => {
             <View style={styles.heroContent}>
               <View style={styles.heroTop}>
                 <Text style={styles.heroLabel}>Today&apos;s Sales</Text>
-                <Icon name="info" size={18} color="rgba(255,255,255,0.85)" />
+                <Icon name="info" size={moderateScale(18)} color="rgba(255,255,255,0.85)" />
               </View>
               <Text style={styles.heroAmount}>
                 {currency}
@@ -354,7 +383,7 @@ export const DashboardScreen: React.FC = () => {
                 {showGrowthTrend ? (
                   <Icon
                     name={growthUp ? 'trending-up' : 'trending-down'}
-                    size={14}
+                    size={moderateScale(14)}
                     color="#BBF7D0"
                   />
                 ) : null}
@@ -371,11 +400,11 @@ export const DashboardScreen: React.FC = () => {
             {quickActions.map(a => (
               <TouchableOpacity
                 key={a.key}
-                style={[styles.quickCard, {width: QUICK_CARD_W},{backgroundColor: a.bg}]}
+                style={[styles.quickCard, {width: quickCardW}, {backgroundColor: a.bg}]}
                 activeOpacity={0.85}
                 onPress={a.onPress}>
                 <View style={[styles.quickIcon, {backgroundColor: a.bg}]}>
-                  <Icon name={a.iconName} size={32} color={colors.navy} />
+                  <Icon name={a.iconName} size={moderateScale(32)} color={colors.navy} />
                 </View>
                 <Text style={styles.quickLabel} numberOfLines={2}>
                   {a.label}
@@ -391,11 +420,18 @@ export const DashboardScreen: React.FC = () => {
             <TouchableOpacity
               activeOpacity={0.9}
               onPress={() =>
-                tabNavigation?.navigate('Profile', {screen: 'InventoryList'})
+                tabNavigation?.navigate('Profile', {
+                  state: {
+                    routes: [
+                      {name: 'InventoryList', params: {fromSideMenu: true}},
+                    ],
+                    index: 0,
+                  },
+                })
               }>
               <View style={styles.alertStrip}>
                 <View style={styles.alertIcon}>
-                  <Icon name="bell" size={18} color={colors.navy} />
+                  <Icon name="bell" size={moderateScale(18)} color={colors.navy} />
                 </View>
                 <View style={styles.alertBody}>
                   <Text style={styles.alertTitle}>
@@ -450,7 +486,7 @@ export const DashboardScreen: React.FC = () => {
                             ORDER_ICON_TINTS[index % ORDER_ICON_TINTS.length],
                         },
                       ]}>
-                      <Icon name="cart" size={20} color={colors.navy} />
+                      <Icon name="cart" size={moderateScale(20)} color={colors.navy} />
                     </View>
                     <View style={styles.orderBody}>
                       <Text style={styles.orderTitle} numberOfLines={1}>
@@ -505,7 +541,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: H_PAD,
     paddingTop: spacing.sm,
-    paddingBottom: spacing.xxxl + 8,
+    paddingBottom: spacing.xxxl + scale(8),
   },
   appBarFixed: {
     flexDirection: 'row',
@@ -518,66 +554,65 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
     zIndex: 10,
-    // elevation: 1,
     shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
+    shadowOffset: {width: 0, height: scale(2)},
     shadowOpacity: 0.06,
-    shadowRadius: 4,
+    shadowRadius: scale(4),
   },
   iconBtn: {
-    width: 40,
-    height: 40,
+    width: scale(40),
+    height: scale(40),
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
   },
   menuIcon: {
-    fontSize: 22,
+    fontSize: moderateScale(22),
     color: colors.navy,
     fontWeight: '600',
   },
   logo: {
-    height: 36,
-    width: 130,
+    height: verticalScale(36),
+    width: scale(130),
     flex: 1,
     marginHorizontal: spacing.sm,
   },
   appBarRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: scale(4),
   },
-  bellIcon: {fontSize: 20},
+  bellIcon: {fontSize: moderateScale(20)},
   badge: {
     position: 'absolute',
-    top: 2,
-    right: 2,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
+    top: scale(2),
+    right: scale(2),
+    minWidth: scale(18),
+    height: scale(18),
+    borderRadius: scale(9),
     backgroundColor: '#EF4444',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: scale(4),
     borderWidth: 2,
     borderColor: '#F8FAF8',
   },
   badgeText: {
     color: colors.white,
-    fontSize: 10,
+    fontSize: moderateScale(10),
     fontWeight: '800',
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: scale(40),
+    height: scale(40),
+    borderRadius: scale(20),
     backgroundColor: colors.green,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
     color: colors.white,
-    fontSize: 13,
+    fontSize: moderateScale(13),
     fontWeight: '800',
   },
   greetingRow: {
@@ -589,10 +624,10 @@ const styles = StyleSheet.create({
   },
   greeting: {
     flex: 1,
-    fontSize: 20,
+    fontSize: moderateScale(20),
     fontWeight: '800',
     color: colors.navy,
-    lineHeight: 28,
+    lineHeight: moderateScale(28),
   },
   dateChip: {
     flexDirection: 'row',
@@ -601,20 +636,20 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: radii.pill,
     paddingHorizontal: spacing.md,
-    paddingVertical: 8,
+    paddingVertical: verticalScale(8),
     backgroundColor: colors.white,
-    gap: 4,
-    maxWidth: SCREEN_W * 0.46,
+    gap: scale(4),
+    maxWidth: '46%',
   },
-  dateChipIcon: {fontSize: 12},
+  dateChipIcon: {fontSize: moderateScale(12)},
   dateChipText: {
-    fontSize: 11,
+    fontSize: moderateScale(11),
     fontWeight: '600',
     color: colors.navy,
     flexShrink: 1,
   },
   dateChevron: {
-    fontSize: 10,
+    fontSize: moderateScale(10),
     color: colors.muted,
   },
   storeRow: {
@@ -622,16 +657,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     alignSelf: 'flex-start',
     marginBottom: spacing.lg,
-    gap: 4,
+    gap: scale(4),
     maxWidth: '85%',
   },
   storeName: {
-    fontSize: 15,
+    fontSize: moderateScale(15),
     fontWeight: '600',
     color: colors.muted,
   },
   storeChevron: {
-    fontSize: 12,
+    fontSize: moderateScale(12),
     color: colors.muted,
   },
   heroWrap: {
@@ -639,7 +674,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.xl,
     overflow: 'hidden',
     marginBottom: spacing.xl,
-    minHeight: 168,
+    minHeight: verticalScale(168),
     justifyContent: 'center',
     ...cardShadow,
     marginTop: spacing.xl,
@@ -654,26 +689,26 @@ const styles = StyleSheet.create({
   },
   heroContent: {
     padding: spacing.xl,
-    paddingRight: SCREEN_W * 0.38,
+    paddingRight: '38%',
     zIndex: 1,
   },
   heroTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: scale(6),
   },
   heroLabel: {
     color: 'rgba(255,255,255,0.9)',
-    fontSize: 14,
+    fontSize: moderateScale(14),
     fontWeight: '600',
   },
   heroInfo: {
     color: 'rgba(255,255,255,0.55)',
-    fontSize: 15,
+    fontSize: moderateScale(15),
   },
   heroAmount: {
     marginTop: spacing.sm,
-    fontSize: 34,
+    fontSize: moderateScale(34),
     fontWeight: '800',
     color: colors.white,
     letterSpacing: -0.5,
@@ -681,17 +716,17 @@ const styles = StyleSheet.create({
   heroBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: scale(6),
     alignSelf: 'flex-start',
     marginTop: spacing.md,
     backgroundColor: HERO_BADGE_BG,
     paddingHorizontal: spacing.md,
-    paddingVertical: 6,
+    paddingVertical: verticalScale(6),
     borderRadius: radii.pill,
   },
   heroBadgeText: {
     color: colors.white,
-    fontSize: 12,
+    fontSize: moderateScale(12),
     fontWeight: '700',
   },
   sectionHead: {
@@ -702,17 +737,17 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: moderateScale(18),
     fontWeight: '800',
     color: colors.navy,
   },
   editLink: {
-    fontSize: 14,
+    fontSize: moderateScale(14),
     fontWeight: '700',
     color: colors.green,
   },
   viewAll: {
-    fontSize: 14,
+    fontSize: moderateScale(14),
     fontWeight: '700',
     color: colors.green,
   },
@@ -726,25 +761,25 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderRadius: radii.lg,
     paddingVertical: spacing.md,
-    paddingHorizontal: 6,
+    paddingHorizontal: scale(6),
     alignItems: 'center',
     ...cardShadow,
   },
   quickIcon: {
-    width:  48,
-    height: 48,
+    width: scale(48),
+    height: scale(48),
     borderRadius: radii.md,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm,
   },
-  quickEmoji: {fontSize: 32},
+  quickEmoji: {fontSize: moderateScale(32)},
   quickLabel: {
-    fontSize: 12,
+    fontSize: moderateScale(12),
     fontWeight: '700',
     color: colors.navy,
     textAlign: 'center',
-    lineHeight: 14,
+    lineHeight: moderateScale(14),
   },
   alertStrip: {
     flexDirection: 'row',
@@ -757,28 +792,28 @@ const styles = StyleSheet.create({
     borderColor: '#FDBA74',
   },
   alertIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: scale(44),
+    height: scale(44),
+    borderRadius: scale(22),
     backgroundColor: colors.orange,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
   },
-  alertIconText: {fontSize: 20},
-  alertBody: {flex: 1},
+  alertIconText: {fontSize: moderateScale(20)},
+  alertBody: {flex: 1, minWidth: 0},
   alertTitle: {
-    fontSize: 15,
+    fontSize: moderateScale(15),
     fontWeight: '700',
     color: colors.navy,
   },
   alertSub: {
-    marginTop: 2,
-    fontSize: 13,
+    marginTop: verticalScale(2),
+    fontSize: moderateScale(13),
     color: colors.muted,
   },
   alertChevron: {
-    fontSize: 22,
+    fontSize: moderateScale(22),
     color: colors.orange,
     fontWeight: '300',
     marginLeft: spacing.sm,
@@ -791,15 +826,15 @@ const styles = StyleSheet.create({
     ...cardShadow,
   },
   emptyTitle: {
-    fontSize: 17,
+    fontSize: moderateScale(17),
     fontWeight: '700',
     color: colors.navy,
   },
   emptyText: {
     marginTop: spacing.sm,
-    fontSize: 14,
+    fontSize: moderateScale(14),
     color: colors.muted,
-    lineHeight: 20,
+    lineHeight: moderateScale(20),
   },
   emptyCta: {
     marginTop: spacing.lg,
@@ -812,7 +847,7 @@ const styles = StyleSheet.create({
   emptyCtaText: {
     color: colors.white,
     fontWeight: '700',
-    fontSize: 14,
+    fontSize: moderateScale(14),
   },
   orderRow: {
     flexDirection: 'row',
@@ -824,24 +859,24 @@ const styles = StyleSheet.create({
     ...cardShadow,
   },
   orderIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: scale(48),
+    height: scale(48),
+    borderRadius: scale(24),
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
   },
-  orderIconEmoji: {fontSize: 20},
+  orderIconEmoji: {fontSize: moderateScale(20)},
   orderBody: {flex: 1, minWidth: 0},
   orderTitle: {
-    fontSize: 15,
+    fontSize: moderateScale(15),
     fontWeight: '700',
     color: colors.navy,
   },
   orderTime: {
-    fontSize: 14,
+    fontSize: moderateScale(14),
     color: colors.muted,
-    marginTop: 2,
+    marginTop: verticalScale(2),
   },
   itemsPreview: {
     marginTop: spacing.sm,
@@ -850,22 +885,22 @@ const styles = StyleSheet.create({
     borderTopColor: colors.borderLight,
   },
   itemPreviewLine: {
-    fontSize: 12,
+    fontSize: moderateScale(12),
     color: colors.navy,
     fontWeight: '500',
-    marginTop: 2,
+    marginTop: verticalScale(2),
   },
   itemPreviewMore: {
-    marginTop: 3,
-    fontSize: 11,
+    marginTop: verticalScale(3),
+    fontSize: moderateScale(11),
     fontWeight: '600',
     color: colors.green,
   },
-  orderRight: {alignItems: 'flex-end', marginLeft: spacing.sm},
+  orderRight: {alignItems: 'flex-end', marginLeft: spacing.sm, flexShrink: 0},
   orderAmount: {
-    fontSize: 16,
+    fontSize: moderateScale(16),
     fontWeight: '800',
     color: colors.navy,
-    marginTop: 15,
+    marginTop: verticalScale(15),
   },
 });

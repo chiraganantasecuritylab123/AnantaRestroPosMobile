@@ -26,6 +26,13 @@ import {
 } from '../components/ui';
 import type { NotificationListItem } from '../services/notificationsApi';
 import { colors, cardShadow, radii, spacing } from '../theme';
+import {
+  isTablet,
+  maxContentWidth,
+  moderateScale,
+  scale,
+  verticalScale,
+} from '../utils/responsive';
 import type { DashboardStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<DashboardStackParamList, 'Notifications'>;
@@ -241,7 +248,14 @@ export const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
             style={styles.listScroll}
             data={items}
             keyExtractor={item => item.id}
-            contentContainerStyle={styles.list}
+            contentContainerStyle={[
+              styles.list,
+              isTablet() && {
+                maxWidth: maxContentWidth(),
+                width: '100%',
+                alignSelf: 'center',
+              },
+            ]}
             refreshControl={
               <RefreshControl
                 refreshing={isFetching && page === 1 && !isLoadingMore}
@@ -258,7 +272,7 @@ export const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
             ListHeaderComponent={
               <View style={[styles.summaryCard, cardShadow]}>
                 <View style={styles.summaryIconWrap}>
-                  <BellIcon size={22} color={colors.navy} />
+                  <BellIcon size={moderateScale(22)} color={colors.navy} />
                 </View>
                 <View style={styles.summaryTextCol}>
                   <Text style={styles.summaryTitle}>Inbox</Text>
@@ -271,7 +285,7 @@ export const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
             }
             ListEmptyComponent={
               <View style={styles.empty}>
-                <CheckIcon size={40} color={colors.green} strokeWidth={3} />
+                <CheckIcon size={moderateScale(40)} color={colors.green} strokeWidth={3} />
                 <Text style={styles.emptyTitle}>
                   {unreadOnly === 1 ? 'No unread' : 'No notifications'}
                 </Text>
@@ -360,7 +374,7 @@ const styles = StyleSheet.create({
     borderColor: colors.green,
   },
   filterChipText: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     fontWeight: '700',
     color: colors.muted,
   },
@@ -386,25 +400,25 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   summaryIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: scale(48),
+    height: scale(48),
+    borderRadius: scale(24),
     backgroundColor: '#FFEDD5',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  summaryIcon: { fontSize: 22 },
-  summaryTextCol: { flex: 1 },
+  summaryIcon: {fontSize: moderateScale(22)},
+  summaryTextCol: {flex: 1, minWidth: 0},
   summaryTitle: {
-    fontSize: 16,
+    fontSize: moderateScale(16),
     fontWeight: '800',
     color: colors.navy,
   },
   summarySub: {
-    marginTop: 4,
-    fontSize: 13,
+    marginTop: verticalScale(4),
+    fontSize: moderateScale(13),
     color: colors.muted,
-    lineHeight: 18,
+    lineHeight: moderateScale(18),
   },
   card: {
     backgroundColor: colors.white,
@@ -430,26 +444,26 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: scale(8),
+    height: scale(8),
+    borderRadius: scale(4),
     backgroundColor: colors.green,
   },
   cardTitle: {
     flex: 1,
-    fontSize: 16,
+    fontSize: moderateScale(16),
     fontWeight: '700',
     color: colors.navy,
   },
   cardTitleUnread: {
     fontWeight: '800',
   },
-  cardWhen: { fontSize: 12, color: colors.muted, fontWeight: '600' },
+  cardWhen: { fontSize: moderateScale(12), color: colors.muted, fontWeight: '600' },
   cardBody: {
-    marginTop: 6,
-    fontSize: 14,
+    marginTop: verticalScale(6),
+    fontSize: moderateScale(14),
     color: colors.muted,
-    lineHeight: 20,
+    lineHeight: moderateScale(20),
   },
   cardFooter: {
     flexDirection: 'row',
@@ -458,7 +472,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   typeLabel: {
-    fontSize: 12,
+    fontSize: moderateScale(12),
     color: colors.muted,
     fontWeight: '600',
     textTransform: 'capitalize',
@@ -471,37 +485,37 @@ const styles = StyleSheet.create({
     marginVertical: spacing.lg,
   },
   footerText: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     color: colors.muted,
     fontWeight: '600',
   },
   footerHint: {
     textAlign: 'center',
-    fontSize: 12,
+    fontSize: moderateScale(12),
     color: colors.muted,
     marginVertical: spacing.md,
   },
   empty: {
     alignItems: 'center',
-    paddingTop: 48,
+    paddingTop: verticalScale(48),
     paddingHorizontal: spacing.xl,
   },
   emptyIcon: {
-    fontSize: 40,
+    fontSize: moderateScale(40),
     color: colors.green,
     fontWeight: '800',
   },
   emptyTitle: {
     marginTop: spacing.md,
-    fontSize: 18,
+    fontSize: moderateScale(18),
     fontWeight: '800',
     color: colors.navy,
   },
   emptySub: {
     marginTop: spacing.sm,
-    fontSize: 14,
+    fontSize: moderateScale(14),
     color: colors.muted,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: moderateScale(20),
   },
 });

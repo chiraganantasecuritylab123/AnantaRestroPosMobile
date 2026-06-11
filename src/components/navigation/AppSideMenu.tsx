@@ -1,6 +1,5 @@
-import React, {useEffect, useRef, useState} from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  Alert,
   Animated,
   Dimensions,
   Image,
@@ -12,26 +11,31 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
-import {useNavigation} from '@react-navigation/native';
-import type {NavigatorScreenParams} from '@react-navigation/native';
-import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
-import {useSignoutMutation} from '../../services/authApi';
-import {useGetPosInitQuery} from '../../services/posApi';
-import {logout} from '../../features/authTokenSlice';
-import {useAppDispatch, useAppSelector} from '../../useAppHooks';
-import {useAppMenu} from '../../context/AppMenuContext';
-import {resolveCurrencySymbol, RUPEE_SYMBOL} from '../../utils/currency';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import type { NavigatorScreenParams } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useSignoutMutation } from '../../services/authApi';
+import { useGetPosInitQuery } from '../../services/posApi';
+import { useAppDispatch } from '../../useAppHooks';
+import { performAppLogout } from '../../store';
+import { useAppMenu } from '../../context/AppMenuContext';
+import { useOptionalNavigationLeaveGuard } from '../../context/NavigationLeaveGuardContext';
 import type {
   MainTabParamList,
   ProfileStackParamList,
   RootStackParamList,
 } from '../../navigation/types';
-import {Icon, ConfirmDialog, LogOutIcon} from '../ui';
-import type {IconName} from '../ui';
-import {colors, radii, spacing} from '../../theme';
+import { Icon, ConfirmDialog, LogOutIcon } from '../ui';
+import type { IconName } from '../ui';
+import { getAppVersion } from '../../constants/appVersion';
+import { colors, radii, spacing } from '../../theme';
+import { moderateScale, scale, verticalScale } from '../../utils/responsive';
 
-const DRAWER_W = Math.min(Dimensions.get('window').width * 0.86, 340);
+const DRAWER_W = Math.min(
+  Dimensions.get('window').width * 0.86,
+  scale(340),
+);
 
 /** Side menu renders outside Tab.Navigator — use root stack + nested tab routes. */
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -53,7 +57,7 @@ function goToProfileScreen(navigation: Nav, screen: ProfileMenuScreen) {
     screen: 'Profile',
     params: {
       state: {
-        routes: [{name: screen, params: {fromSideMenu: true}}],
+        routes: [{ name: screen, params: { fromSideMenu: true } }],
         index: 0,
       },
     },
@@ -87,26 +91,26 @@ function MenuRow({
       style={styles.row}
       onPress={onPress}
       activeOpacity={0.75}>
-      <View style={[styles.iconCircle, {backgroundColor: item.iconBg}]}>
-        <Icon name={item.iconName} size={18} color={colors.navy} />
+      <View style={[styles.iconCircle, { backgroundColor: item.iconBg }]}>
+        <Icon name={item.iconName} size={moderateScale(18)} color={colors.navy} />
       </View>
-      <Text style={styles.rowLabel}>{item.label}</Text>
+      <Text style={[styles.rowLabel, item.key === 'logout' && { color: colors.error }]}>{item.label}</Text>
       <View style={styles.rowRight}>
         {item.trailing ? (
           <Text style={styles.rowTrailing}>{item.trailing}</Text>
         ) : null}
-        <Icon name="chevron-right" size={18} color={colors.muted} />
+        <Icon name="chevron-right" size={moderateScale(18)} color={colors.muted} />
       </View>
     </TouchableOpacity>
   );
 }
 
 export const AppSideMenu: React.FC = () => {
-  const {menuVisible, closeMenu} = useAppMenu();
+  const { menuVisible, closeMenu } = useAppMenu();
+  const leaveGuard = useOptionalNavigationLeaveGuard();
   const navigation = useNavigation<Nav>();
   const dispatch = useAppDispatch();
-  const user = useAppSelector(state => state.authToken.user);
-  const {data: posInit} = useGetPosInitQuery();
+  const { data: posInit } = useGetPosInitQuery();
   const [signout] = useSignoutMutation();
 
   const slideX = useRef(new Animated.Value(-DRAWER_W)).current;
@@ -115,8 +119,6 @@ export const AppSideMenu: React.FC = () => {
 
   const storeName =
     posInit?.storeSettings?.store_name?.trim() || 'Ananta Restaurant';
-  const currency = resolveCurrencySymbol(posInit?.storeSettings?.currency);
-  const roleLabel = (user?.role ?? 'waiter').replace(/_/g, ' ');
 
   useEffect(() => {
     if (menuVisible) {
@@ -140,18 +142,15 @@ export const AppSideMenu: React.FC = () => {
 
   const navigate = (action: () => void) => {
     closeMenu();
-    requestAnimationFrame(() => action());
+    requestAnimationFrame(() => {
+      if (leaveGuard?.attemptNavigation(action)) {
+        action();
+      }
+    });
   };
 
-  const performLogout = async () => {
-    try {
-      await signout().unwrap();
-    } catch {
-      // local logout always runs even if network fails.
-    } finally {
-      dispatch(logout());
-    }
-  };
+  const performLogout = () =>
+    performAppLogout(dispatch, () => signout().unwrap());
 
   const onLogoutPress = () => {
     closeMenu();
@@ -163,10 +162,6 @@ export const AppSideMenu: React.FC = () => {
   const onLogoutConfirm = () => {
     setLogoutConfirmVisible(false);
     void performLogout();
-  };
-
-  const comingSoon = (title: string) => {
-    Alert.alert(title, 'This feature will be available in a future update.');
   };
 
   const menuSections: MenuSection[] = [
@@ -191,21 +186,43 @@ export const AppSideMenu: React.FC = () => {
         },
         {
           key: 'pos',
-          label: 'OPS',
+          label: 'POS',
           iconName: 'cart',
-          iconBg: '#DBEAFE',
+          iconBg: '#DCFCE7',
           onPress: () =>
             navigate(() =>
-              goToTab(navigation, {screen: 'POS', params: {screen: 'PosHome'}}),
+              goToTab(navigation, { screen: 'POS', params: { screen: 'PosHome' } }),
             ),
         },
         {
           key: 'orders',
           label: 'Orders',
-          iconName: 'receipt',
+          iconName: 'clipboard',
           iconBg: '#E0E7FF',
-          onPress: () => navigate(() => goToTab(navigation, {screen: 'Orders'})),
-        }
+          onPress: () =>
+            navigate(() =>
+              goToTab(navigation, {
+                screen: 'Orders',
+                params: { screen: 'OrdersMain' },
+              }),
+            ),
+        },
+        {
+          key: 'sales-history',
+          label: 'Sales history',
+          iconName: 'bar-chart',
+          iconBg: '#FEF3C7',
+          onPress: () =>
+            navigate(() =>
+              goToTab(navigation, {
+                screen: 'Orders',
+                params: {
+                  screen: 'SalesOrders',
+                  params: {fromSideMenu: true},
+                },
+              }),
+            ),
+        },
       ],
     },
     {
@@ -216,7 +233,7 @@ export const AppSideMenu: React.FC = () => {
           key: 'menuItems',
           label: 'Menu Items',
           iconName: 'utensils',
-          iconBg: '#DCFCE7',
+          iconBg: '#D1FAE5',
           onPress: () =>
             navigate(() => goToProfileScreen(navigation, 'MenuItemsList')),
         },
@@ -229,36 +246,26 @@ export const AppSideMenu: React.FC = () => {
             navigate(() => goToProfileScreen(navigation, 'CategoriesList')),
         },
         {
+          key: 'taxes',
+          label: 'Taxes',
+          iconName: 'receipt',
+          iconBg: '#FCE7F3',
+          onPress: () =>
+            navigate(() => goToProfileScreen(navigation, 'TaxesList')),
+        },
+        {
           key: 'inventory',
           label: 'Inventory',
           iconName: 'bar-chart',
-          iconBg: '#D1FAE5',
+          iconBg: '#CCFBF1',
           onPress: () =>
             navigate(() => goToProfileScreen(navigation, 'InventoryList')),
         },
-        // {
-        //   key: 'add-menu',
-        //   label: 'Add menu item',
-        //   iconName: 'plus',
-        //   iconBg: '#EDE9FE',
-        //   onPress: () =>
-        //     navigate(() => goToProfileScreen(navigation, 'CreateMenuItem')),
-        // },
-        // {
-        //   key: 'add-inventory',
-        //   label: 'Add inventory item',
-        //   iconName: 'clipboard',
-        //   iconBg: '#DCFCE7',
-        //   onPress: () =>
-        //     navigate(() =>
-        //       goToProfileScreen(navigation, 'AddInventoryItem'),
-        //     ),
-        // },
         {
           key: 'customer',
           label: 'Customers',
           iconName: 'users',
-          iconBg: '#EDE9FE',
+          iconBg: '#F3E8FF',
           onPress: () =>
             navigate(() => goToProfileScreen(navigation, 'Customers')),
         },
@@ -266,7 +273,7 @@ export const AppSideMenu: React.FC = () => {
           key: 'printer-settings',
           label: 'Printer settings',
           iconName: 'settings',
-          iconBg: '#E0E7FF',
+          iconBg: '#E2E8F0',
           onPress: () =>
             navigate(() => goToProfileScreen(navigation, 'PrinterSettings')),
         },
@@ -275,46 +282,6 @@ export const AppSideMenu: React.FC = () => {
     {
       key: 'account',
       items: [
-        // {
-        //   key: 'role',
-        //   label: 'User role',
-        //   iconName: 'users',
-        //   iconBg: '#FCE7F3',
-        //   trailing: roleLabel,
-        //   onPress: () =>
-        //     navigate(() => goToProfileScreen(navigation, 'ProfileMain')),
-        // },
-        // {
-        //   key: 'currency',
-        //   label: 'Currency',
-        //   iconName: 'receipt',
-        //   iconBg: '#DCFCE7',
-        //   trailing: `(${currency || RUPEE_SYMBOL})`,
-        //   onPress: () => {
-        //     closeMenu();
-        //     Alert.alert('Currency', `Outlet currency: ${currency}`);
-        //   },
-        // },
-        // {
-        //   key: 'language',
-        //   label: 'Select your language',
-        //   iconName: 'globe',
-        //   iconBg: '#CCFBF1',
-        //   onPress: () => {
-        //     closeMenu();
-        //     comingSoon('Language');
-        //   },
-        // },
-        // {
-        //   key: 'barcode',
-        //   label: 'Barcode generator',
-        //   iconName: 'menu',
-        //   iconBg: '#EDE9FE',
-        //   onPress: () => {
-        //     closeMenu();
-        //     comingSoon('Barcode generator');
-        //   },
-        // },
         {
           key: 'logout',
           label: 'Logout',
@@ -326,6 +293,8 @@ export const AppSideMenu: React.FC = () => {
     },
   ];
 
+  const LOGO_SIZE = scale(52);
+
   return (
     <>
       <Modal
@@ -335,16 +304,19 @@ export const AppSideMenu: React.FC = () => {
         onRequestClose={closeMenu}>
         <View style={styles.root}>
           <Pressable style={StyleSheet.absoluteFill} onPress={closeMenu}>
-            <Animated.View style={[styles.backdrop, {opacity: fade}]} />
+            <Animated.View style={[styles.backdrop, { opacity: fade }]} />
           </Pressable>
 
           <Animated.View
-            style={[styles.drawer, {transform: [{translateX: slideX}]}]}>
+            style={[styles.drawer, { transform: [{ translateX: slideX }] }]}>
             <SafeAreaView style={styles.drawerSafe} edges={['top', 'bottom']}>
               <View style={styles.drawerHeader}>
                 <Image
                   source={require('../../assets/logo-dark.png')}
-                  style={styles.logo}
+                  style={[
+                    styles.logo,
+                    { width: LOGO_SIZE, height: LOGO_SIZE, borderRadius: LOGO_SIZE / 2 },
+                  ]}
                   resizeMode="contain"
                 />
                 <View style={styles.headerText}>
@@ -364,7 +336,7 @@ export const AppSideMenu: React.FC = () => {
                 {menuSections.map(section => (
                   <View key={section.key}>
                     {section.title ? (
-                      <Text style={styles.sectionTitle}>{section.title}</Text>
+                      <Text style={[styles.sectionTitle]}>{section.title}</Text>
                     ) : null}
                     {section.items.map(item => (
                       <MenuRow
@@ -375,7 +347,13 @@ export const AppSideMenu: React.FC = () => {
                     ))}
                   </View>
                 ))}
+                <View style={styles.versionFooter}>
+                  <Text style={styles.versionText}>
+                    version {getAppVersion()}
+                  </Text>
+                </View>
               </ScrollView>
+
             </SafeAreaView>
           </Animated.View>
         </View>
@@ -388,7 +366,7 @@ export const AppSideMenu: React.FC = () => {
         cancelLabel="Cancel"
         confirmLabel="Sign out"
         destructive
-        icon={<LogOutIcon size={26} color={colors.error} />}
+        icon={<LogOutIcon size={moderateScale(26)} color={colors.error} />}
         onCancel={onLogoutCancel}
         onConfirm={onLogoutConfirm}
       />
@@ -413,12 +391,12 @@ const styles = StyleSheet.create({
     width: DRAWER_W,
     backgroundColor: colors.white,
     shadowColor: '#000',
-    shadowOffset: {width: 4, height: 0},
+    shadowOffset: { width: scale(4), height: 0 },
     shadowOpacity: 0.15,
-    shadowRadius: 12,
+    shadowRadius: moderateScale(12),
     elevation: 16,
   },
-  drawerSafe: {flex: 1},
+  drawerSafe: { flex: 1 },
   drawerHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -428,20 +406,18 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   logo: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
     backgroundColor: '#FEF9C3',
+    flexShrink: 0,
   },
-  headerText: {flex: 1},
+  headerText: { flex: 1, minWidth: 0 },
   storeName: {
-    fontSize: 20,
+    fontSize: moderateScale(20),
     fontWeight: '800',
     color: colors.navy,
   },
   storeSub: {
-    marginTop: 2,
-    fontSize: 14,
+    marginTop: verticalScale(2),
+    fontSize: moderateScale(14),
     color: colors.muted,
     fontWeight: '500',
   },
@@ -454,11 +430,24 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingTop: spacing.sm,
   },
+  versionFooter: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderLight,
+    paddingHorizontal: spacing.lg,
+    paddingTop: verticalScale(14),
+    paddingBottom: verticalScale(18),
+  },
+  versionText: {
+    fontSize: moderateScale(12),
+    fontWeight: '600',
+    color: colors.mutedLight,
+    textAlign: 'center',
+  },
   sectionTitle: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
     paddingBottom: spacing.xs,
-    fontSize: 13,
+    fontSize: moderateScale(13),
     fontWeight: '800',
     color: colors.muted,
     textTransform: 'uppercase',
@@ -467,41 +456,38 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: verticalScale(10),
     paddingHorizontal: spacing.lg,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderLight,
   },
   iconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: scale(40),
+    height: scale(40),
+    borderRadius: scale(20),
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
+    flexShrink: 0,
   },
-  iconEmoji: {fontSize: 18},
   rowLabel: {
     flex: 1,
-    fontSize: 16,
+    fontSize: moderateScale(16),
     fontWeight: '600',
     color: colors.navy,
+    minWidth: 0,
   },
   rowRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: scale(4),
     maxWidth: '38%',
+    flexShrink: 0,
   },
   rowTrailing: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     fontWeight: '600',
     color: colors.muted,
     textTransform: 'capitalize',
-  },
-  chevron: {
-    fontSize: 22,
-    color: colors.muted,
-    fontWeight: '300',
   },
 });

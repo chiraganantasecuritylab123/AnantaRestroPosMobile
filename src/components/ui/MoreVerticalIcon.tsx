@@ -1,6 +1,7 @@
 import React from 'react';
 import Svg, {Circle} from 'react-native-svg';
 import {colors} from '../../theme';
+import {moderateScale} from '../../utils/responsive';
 
 type Props = {
   size?: number;
@@ -8,7 +9,7 @@ type Props = {
 };
 
 export const MoreVerticalIcon: React.FC<Props> = ({
-  size = 22,
+  size = moderateScale(22),
   color = colors.navy,
 }) => {
   const dot = size * 0.18;

@@ -11,15 +11,93 @@ export interface AuthUser {
   name: string;
   role: string;
   photo: string | null;
-  designation: string | null;
+  designation?: string | null;
   phone: string | null;
+  phone_country_code?: string | null;
+  phone_verified?: boolean;
   email: string;
   scope: string;
-  tenant_id: number;
+  tenant_id: string | number;
+  id?: string;
   is_active: number;
   outlet_id?: number | string;
   outletId?: number | string;
   default_outlet_id?: number | string;
+  subscription_end?: string | null;
+  subscription_id?: string | null;
+  is_free_plan_used?: boolean;
+  business_type?: string;
+  signup_source?: string;
+  is_subscription_active?: boolean;
+}
+
+export interface SubscriptionPlan {
+  id: string;
+  packageName: string;
+  planType: string;
+  packageType: string;
+  currency: string;
+  amount: number;
+  offerPrice: number;
+  durationDays: number;
+  isRecommended: boolean;
+  selectedModules: string[];
+  additionalFeatures: string[];
+}
+
+export interface PlansResponse {
+  success: boolean;
+  plans: SubscriptionPlan[];
+}
+
+export interface SubscriptionBillingEntry {
+  id: string;
+  invoiceId: string;
+  date: string;
+  plan: string;
+  amount: number;
+  status: string;
+  displayKind: string;
+}
+
+export interface SubscriptionUsageSummary {
+  outletsUsed: number;
+  outletsLimit: number | null;
+  usersUsed: number;
+  usersLimit: number | null;
+  ordersThisMonth: number;
+}
+
+export interface SubscriptionDetails {
+  id: string;
+  is_active: number;
+  subscription_id: string | null;
+  payment_customer_id: string | null;
+  subscription_start: string | null;
+  subscription_end: string | null;
+  planName: string | null;
+  planCurrency: string | null;
+  planAmount: number | null;
+  planType: string | null;
+  planDurationDays: number | null;
+  planSelectedModules: string[] | null;
+  planAiTokenLimit: number | null;
+  monthlyPlan: unknown;
+  annualPlan: unknown;
+  subscriptionRow: unknown;
+  billingHistory: SubscriptionBillingEntry[];
+  usageSummary: SubscriptionUsageSummary | null;
+}
+
+export interface CancelSubscriptionRequest {
+  id: string;
+  subscriptionId: string;
+}
+
+export interface CancelSubscriptionResponse {
+  success: boolean;
+  message: string;
+  is_subscription_active: boolean;
 }
 
 export interface SigninResponse {
@@ -29,16 +107,38 @@ export interface SigninResponse {
   user: AuthUser;
 }
 
+export type AuthFlow = 'login' | 'register';
+
+export interface OtpPolicy {
+  maxVerifyAttempts?: number;
+  lockoutMinutes?: number;
+  sendMaxPerWindow?: number;
+  sendWindowMinutes?: number;
+  expiryMinutes?: number;
+  msg91Enabled?: boolean;
+  staticMode?: boolean;
+  exposeDevHint?: boolean;
+  staticOtpCode?: string;
+  deliveryMode?: string;
+  environment?: string;
+}
+
 export interface PhoneLoginRequest {
   phone: string;
+  phone_country_code: string;
 }
 
 export interface PhoneLoginResponse {
   success: boolean;
+  flow?: AuthFlow;
+  isNewUser?: boolean;
   message: string;
   phoneMasked?: string;
   preAuthToken?: string;
   devHint?: string;
+  deliveryMode?: string;
+  requiresPhoneVerification?: boolean;
+  otpPolicy?: OtpPolicy;
 }
 
 export interface SendOtpRequest {
@@ -61,16 +161,37 @@ export interface VerifyOtpRequest {
 export interface VerifyOtpResponse {
   success: boolean;
   message: string;
+  flow?: AuthFlow;
   accessToken?: string;
+  preAuthToken?: string;
   user?: AuthUser;
   outlet_id?: number | string;
   outletId?: number | string;
   code?: string;
 }
 
+export type SignupBusinessType = 'dine_in' | 'takeaway' | 'both';
+
+export interface SignupCompleteRequest {
+  preAuthToken: string;
+  biz_name: string;
+  email: string;
+  business_type: SignupBusinessType;
+}
+
+export interface SignupCompleteResponse {
+  success: boolean;
+  message: string;
+  requiresApproval?: boolean;
+  redirectTo?: string;
+  accessToken?: string;
+  user?: AuthUser;
+}
+
 export const authApi = createApi({
   reducerPath: 'authApi',
   baseQuery: baseQueryWithReauthHandling,
+  tagTypes: ['SubscriptionDetails'],
   endpoints: builder => ({
     signin: builder.mutation<SigninResponse, SigninRequest>({
       query: body => ({
@@ -100,11 +221,46 @@ export const authApi = createApi({
         body,
       }),
     }),
+    signupComplete: builder.mutation<SignupCompleteResponse, SignupCompleteRequest>({
+      query: body => ({
+        url: '/auth/signup/complete',
+        method: 'POST',
+        body,
+      }),
+    }),
     signout: builder.mutation<{message: string} | unknown, void>({
       query: () => ({
         url: '/auth/signout',
         method: 'POST',
       }),
+    }),
+    getPlans: builder.query<PlansResponse, {lang?: string} | void>({
+      query: (params = {}) => ({
+        url: '/auth/plans',
+        params: {lang: params?.lang ?? 'en'},
+      }),
+    }),
+    getSubscriptionDetails: builder.query<
+      SubscriptionDetails,
+      {lang?: string} | void
+    >({
+      query: (params = {}) => ({
+        url: '/auth/subscription-details',
+        params: {lang: params?.lang ?? 'en'},
+      }),
+      providesTags: ['SubscriptionDetails'],
+    }),
+    cancelSubscription: builder.mutation<
+      CancelSubscriptionResponse,
+      CancelSubscriptionRequest
+    >({
+      query: body => ({
+        url: '/auth/cancel-subscription',
+        method: 'POST',
+        params: {lang: 'en'},
+        body,
+      }),
+      invalidatesTags: ['SubscriptionDetails'],
     }),
   }),
 });
@@ -114,5 +270,9 @@ export const {
   usePhoneLoginMutation,
   useSendOtpMutation,
   useVerifyOtpMutation,
+  useSignupCompleteMutation,
   useSignoutMutation,
+  useGetPlansQuery,
+  useGetSubscriptionDetailsQuery,
+  useCancelSubscriptionMutation,
 } = authApi;

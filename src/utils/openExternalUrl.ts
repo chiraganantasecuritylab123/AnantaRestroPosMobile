@@ -1,18 +1,19 @@
-import {Alert, Linking, Platform} from 'react-native';
+import {Linking, Platform} from 'react-native';
+import {showDialog} from '../context/DialogProvider';
 
 export async function openExternalUrl(
   url: string | undefined | null,
 ): Promise<boolean> {
   const trimmed = url?.trim();
   if (!trimmed) {
-    Alert.alert('Unavailable', 'This link is not configured yet.');
+    showDialog('Unavailable', 'This link is not configured yet.');
     return false;
   }
 
   try {
     const supported = await Linking.canOpenURL(trimmed);
     if (!supported) {
-      Alert.alert(
+      showDialog(
         'Unable to open',
         'No app is available to handle this action.',
       );
@@ -21,7 +22,7 @@ export async function openExternalUrl(
     await Linking.openURL(trimmed);
     return true;
   } catch {
-    Alert.alert('Unable to open', 'Something went wrong. Please try again.');
+    showDialog('Unable to open', 'Something went wrong. Please try again.');
     return false;
   }
 }

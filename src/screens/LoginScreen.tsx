@@ -9,10 +9,10 @@ import {
   Platform,
   TouchableOpacity,
   Image,
-  Vibration,
   Modal,
   Pressable,
   FlatList,
+  useWindowDimensions,
 } from 'react-native';
 import Svg, {Circle, Path, Rect} from 'react-native-svg';
 import {SafeAreaView} from 'react-native-safe-area-context';
@@ -38,6 +38,7 @@ import {
   COUNTRY_DIAL_OPTIONS,
   DEFAULT_COUNTRY,
   formatNationalPhoneDisplay,
+  getPhoneCountryCode,
   maskAuthPhone,
   type CountryDialOption,
 } from '../utils/countryDialCodes';
@@ -47,13 +48,22 @@ import {
   useGetConfigQuery,
 } from '../services/configApi';
 import {openExternalUrl} from '../utils/openExternalUrl';
+import {triggerTapHaptic} from '../utils/tapHaptic';
 import {getAppVersion} from '../constants/appVersion';
+import {
+  maxContentWidth,
+  moderateScale,
+  scale,
+  useBrandLogoSize,
+  verticalScale,
+} from '../utils/responsive';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
 
 function OtpIcon() {
+  const iconSize = moderateScale(22);
   return (
-    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+    <Svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none">
       <Rect
         x={4}
         y={5}
@@ -78,18 +88,21 @@ export const LoginScreen: React.FC<Props> = ({navigation}) => {
   const [phoneLogin, {isLoading: loggingIn}] = usePhoneLoginMutation();
   const [sendOtp, {isLoading: sendingOtp}] = useSendOtpMutation();
   const {data: appConfig} = useGetConfigQuery();
+  const logoSize = useBrandLogoSize();
+  const {height: screenH} = useWindowDimensions();
+  const compact = screenH < verticalScale(680);
 
   const termsUrl = resolveTermsUrl(appConfig?.data);
   const privacyUrl = resolvePrivacyUrl(appConfig?.data);
 
   const isLoading = loggingIn || sendingOtp;
 
+  const handleSendOtpPress = () => {
+    triggerTapHaptic();
+    void onSendOtp();
+  };
+
   const onSendOtp = async () => {
-    if (Platform.OS === 'android') {
-      Vibration.vibrate(20);
-    } else {
-      Vibration.vibrate();
-    }
     setError(null);
     const digits = phone.replace(/\D/g, '');
     if (digits.length !== country.nationalLength) {
@@ -100,9 +113,13 @@ export const LoginScreen: React.FC<Props> = ({navigation}) => {
     }
 
     const authPhone = buildAuthPhone(country, digits);
+    const phoneCountryCode = getPhoneCountryCode(country);
 
     try {
-      const loginRes = await phoneLogin({phone: authPhone}).unwrap();
+      const loginRes = await phoneLogin({
+        phone: authPhone,
+        phone_country_code: phoneCountryCode,
+      }).unwrap();
       if (!loginRes?.success) {
         setError(loginRes?.message ?? 'Unable to send OTP');
         return;
@@ -114,25 +131,33 @@ export const LoginScreen: React.FC<Props> = ({navigation}) => {
         return;
       }
 
-      let expiresInSec = 300;
+      const flow =
+        loginRes.flow ?? (loginRes.isNewUser ? 'register' : 'login');
+      const expiryMinutes = loginRes.otpPolicy?.expiryMinutes ?? 5;
+      let expiresInSec = expiryMinutes * 60;
       let otpDevHint = loginRes?.devHint;
-      try {
-        const otpRes = await sendOtp({preAuthToken}).unwrap();
-        if (otpRes?.expiresInSec) {
-          expiresInSec = otpRes.expiresInSec;
+
+      if (!loginRes.devHint) {
+        try {
+          const otpRes = await sendOtp({preAuthToken}).unwrap();
+          if (otpRes?.expiresInSec) {
+            expiresInSec = otpRes.expiresInSec;
+          }
+          if (otpRes?.devHint) {
+            otpDevHint = otpRes.devHint;
+          }
+        } catch {
+          // phone/login may already trigger OTP; continue with preAuthToken
         }
-        if (otpRes?.devHint) {
-          otpDevHint = otpRes.devHint;
-        }
-      } catch {
-        // phone/login may already trigger OTP; continue with preAuthToken
       }
 
       navigation.navigate('VerifyOtp', {
         phone: authPhone,
+        phoneCountryCode,
         phoneMasked:
           loginRes?.phoneMasked ?? maskAuthPhone(country, digits),
         preAuthToken,
+        flow,
         expiresInSec,
         devHint: otpDevHint,
       });
@@ -161,30 +186,33 @@ export const LoginScreen: React.FC<Props> = ({navigation}) => {
         <KeyboardAvoidingView
           style={styles.flex}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}>
+          keyboardVerticalOffset={Platform.OS === 'ios' ? moderateScale(8) : 0}>
           <ScrollView
             contentContainerStyle={styles.scroll}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
             bounces={false}>
-            <View style={styles.brand}>
+            <View style={styles.contentWrap}>
+            <View style={[styles.brand, compact && styles.brandCompact]}>
               <Image
                 source={require('../assets/splash-screen-logo.png')}
-                style={styles.logo}
+                style={[styles.logo, logoSize]}
                 resizeMode="contain"
+                accessibilityLabel="Ananta POS logo"
               />
-              <Text style={styles.tagline}>
+              <Text style={[styles.tagline, compact && styles.taglineCompact]}>
                 Smart Billing. Complete Business Control.
               </Text>
             </View>
 
-            <Card style={styles.formCard}>
+            <Card style={compact ? styles.formCardCompact : styles.formCard}>
               <View style={styles.cardIconWrap}>
-                <PhoneIcon size={22} color={colors.green} />
+                <PhoneIcon size={moderateScale(22)} color={colors.green} />
               </View>
-              <Text style={styles.cardTitle}>Login with OTP</Text>
+              <Text style={styles.cardTitle}>Login or Sign Up</Text>
               <Text style={styles.cardDesc}>
-                We&apos;ll send a One Time Password to your mobile number
+                Enter your mobile number. We&apos;ll send an OTP to sign in or
+                create a new account.
               </Text>
 
               <Text style={styles.fieldLabel}>Mobile Number</Text>
@@ -199,7 +227,7 @@ export const LoginScreen: React.FC<Props> = ({navigation}) => {
                   <Text style={styles.countryCodeText}>{country.dialCode}</Text>
                   <View style={styles.chevronWrap}>
                     <ChevronRightIcon
-                      size={14}
+                      size={moderateScale(14)}
                       color={colors.muted}
                       strokeWidth={2.5}
                     />
@@ -262,7 +290,7 @@ export const LoginScreen: React.FC<Props> = ({navigation}) => {
                             </View>
                             {selected ? (
                               <CheckIcon
-                                size={20}
+                                size={moderateScale(20)}
                                 color={colors.green}
                                 strokeWidth={2.5}
                               />
@@ -283,20 +311,20 @@ export const LoginScreen: React.FC<Props> = ({navigation}) => {
 
               <GradientButton
                 title="Send OTP"
-                onPress={onSendOtp}
+                onPress={handleSendOtpPress}
                 loading={isLoading}
                 style={styles.submitBtn}
                 showArrow={false}
               />
             </Card>
 
-            <View style={styles.trustRow}>
+            <View style={[styles.trustRow, compact && styles.trustRowCompact]}>
               <View style={[styles.trustIconWrap, {backgroundColor: '#DCFCE7'}]}>
-                <ShieldIcon size={22} color="#166534" />
+                <ShieldIcon size={moderateScale(22)} color="#166534" />
               </View>
               <View style={styles.trustDivider} />
               <View style={[styles.trustIconWrap, {backgroundColor: '#FFEDD5'}]}>
-                <LockIcon size={22} color="#C2410C" />
+                <LockIcon size={moderateScale(22)} color="#C2410C" />
               </View>
               <View style={styles.trustDivider} />
               <View style={[styles.trustIconWrap, {backgroundColor: '#DBEAFE'}]}>
@@ -305,7 +333,7 @@ export const LoginScreen: React.FC<Props> = ({navigation}) => {
             </View>
 
             <View style={styles.legalRow}>
-              <ShieldIcon size={16} color={colors.muted} />
+              <ShieldIcon size={moderateScale(16)} color={colors.muted} />
               <Text style={styles.footerHint}>
                 By continuing, you agree to our{' '}
                 <Text
@@ -327,6 +355,7 @@ export const LoginScreen: React.FC<Props> = ({navigation}) => {
             </View>
 
             <Text style={styles.versionText}>Version {getAppVersion()}</Text>
+            </View>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -340,69 +369,89 @@ const styles = StyleSheet.create({
   scroll: {
     flexGrow: 1,
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.xxxl,
-    marginTop: spacing.xxl,
-    justifyContent: 'center',
+    paddingTop: verticalScale(8),
+    paddingBottom: spacing.xl,
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    marginTop: verticalScale(24),
+  },
+  contentWrap: {
+    width: '100%',
+    maxWidth: maxContentWidth(),
+    alignSelf: 'center',
   },
   brand: {
-    marginBottom: spacing.xl,
-    alignSelf: 'center',
+    marginBottom: spacing.lg,
     alignItems: 'center',
+    width: '100%',
+  },
+  brandCompact: {
+    marginBottom: spacing.md,
   },
   logo: {
-    width: 220,
-    height: 160,
+    alignSelf: 'center',
   },
   tagline: {
-    marginTop: -10,
-    fontSize: 14,
+    marginTop: verticalScale(20),
+    fontSize: moderateScale(14),
     fontWeight: '500',
     color: '#5F6981',
     textAlign: 'center',
+    lineHeight: moderateScale(18),
+    paddingHorizontal: spacing.sm,
+    flexShrink: 1,
+  },
+  taglineCompact: {
+    marginTop: spacing.xs,
+    fontSize: moderateScale(12),
+    lineHeight: moderateScale(16),
   },
   headline: {
     ...typography.hero,
-    fontSize: 28,
+    fontSize: moderateScale(28),
     textAlign: 'center',
     color: colors.navy,
   },
   lead: {
     ...typography.body,
-    fontSize: 15,
-    marginTop: 7,
+    fontSize: moderateScale(15),
+    marginTop: verticalScale(7),
     marginBottom: spacing.xl,
     textAlign: 'center',
     color: '#5B647B',
   },
   formCard: {
-    padding: 22,
-    borderRadius: 22,
+    padding: moderateScale(20),
+    borderRadius: moderateScale(22),
+  },
+  formCardCompact: {
+    padding: moderateScale(16),
+    borderRadius: moderateScale(22),
   },
   cardIconWrap: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: moderateScale(46),
+    height: moderateScale(46),
+    borderRadius: moderateScale(23),
     backgroundColor: '#E8F8ED',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.md,
     alignSelf: 'center',
   },
-  cardIcon: {fontSize: 21},
+  cardIcon: {fontSize: moderateScale(21)},
   cardTitle: {
     ...typography.subtitle,
-    fontSize: 24,
+    fontSize: moderateScale(20),
     textAlign: 'center',
     color: colors.navy,
   },
   cardDesc: {
     ...typography.caption,
-    marginTop: 8,
+    marginTop: verticalScale(8),
     marginBottom: spacing.lg,
-    lineHeight: 22,
+    lineHeight: moderateScale(22),
     textAlign: 'center',
-    fontSize: 14   ,
+    fontSize: moderateScale(14),
     color: '#69738A',
   },
   fieldLabel: {
@@ -423,21 +472,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.sm,
-    paddingVertical: 14,
-    gap: 4,
-    minWidth: 96,
+    paddingVertical: verticalScale(14),
+    gap: scale(4),
+    minWidth: scale(96),
+    flexShrink: 0,
   },
   countryFlag: {
-    fontSize: 18,
+    fontSize: moderateScale(18),
   },
   countryCodeText: {
-    fontSize: 16,
+    fontSize: moderateScale(16),
     fontWeight: '700',
     color: colors.navy,
   },
   chevronWrap: {
     transform: [{rotate: '90deg'}],
-    marginLeft: 2,
+    marginLeft: scale(2),
   },
   countryModalBackdrop: {
     flex: 1,
@@ -451,17 +501,20 @@ const styles = StyleSheet.create({
     paddingTop: spacing.lg,
     paddingBottom: spacing.md,
     maxHeight: '70%',
+    width: '100%',
+    maxWidth: maxContentWidth(),
+    alignSelf: 'center',
   },
   countryModalTitle: {
     ...typography.subtitle,
-    fontSize: 18,
+    fontSize: moderateScale(18),
     textAlign: 'center',
     color: colors.navy,
     marginBottom: spacing.sm,
     paddingHorizontal: spacing.lg,
   },
   countryModalList: {
-    maxHeight: 360,
+    maxHeight: verticalScale(360),
   },
   countryOption: {
     flexDirection: 'row',
@@ -476,34 +529,36 @@ const styles = StyleSheet.create({
     backgroundColor: '#E8F8ED',
   },
   countryOptionFlag: {
-    fontSize: 22,
-    width: 32,
+    fontSize: moderateScale(22),
+    width: scale(32),
     textAlign: 'center',
   },
   countryOptionBody: {
     flex: 1,
+    flexShrink: 1,
   },
   countryOptionName: {
-    fontSize: 15,
+    fontSize: moderateScale(15),
     fontWeight: '700',
     color: colors.navy,
   },
   countryOptionDial: {
-    marginTop: 2,
-    fontSize: 13,
+    marginTop: verticalScale(2),
+    fontSize: moderateScale(13),
     fontWeight: '600',
     color: colors.muted,
   },
   phoneDivider: {
-    width: 1,
-    height: 28,
+    width: StyleSheet.hairlineWidth,
+    height: verticalScale(28),
     backgroundColor: '#E4E7EF',
   },
   phoneInput: {
     flex: 1,
+    flexShrink: 1,
     paddingHorizontal: spacing.md,
-    paddingVertical: 14,
-    fontSize: 16,
+    paddingVertical: verticalScale(14),
+    fontSize: moderateScale(16),
     color: colors.navy,
   },
   errorBanner: {
@@ -516,7 +571,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: colors.error,
-    fontSize: 14,
+    fontSize: moderateScale(14),
     fontWeight: '600',
   },
   submitBtn: {marginTop: spacing.lg},
@@ -524,43 +579,49 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: spacing.xl + 4,
-    paddingHorizontal: spacing.xl,
-    gap: spacing.lg,
+    marginTop: spacing.lg,
+    paddingHorizontal: spacing.md,
+    gap: spacing.md,
+    flexWrap: 'wrap',
+  },
+  trustRowCompact: {
+    marginTop: spacing.md,
   },
   trustIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: moderateScale(48),
+    height: moderateScale(48),
+    borderRadius: moderateScale(24),
     alignItems: 'center',
     justifyContent: 'center',
   },
   trustDivider: {
-    width: 1,
-    height: 32,
+    width: StyleSheet.hairlineWidth,
+    height: verticalScale(32),
     backgroundColor: '#E4E7EF',
   },
   legalRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginTop: spacing.xl,
+    marginTop: spacing.lg,
     paddingHorizontal: spacing.sm,
     gap: spacing.sm,
   },
-  legalShield: {fontSize: 14, marginTop: 2},
+  legalShield: {fontSize: moderateScale(14), marginTop: verticalScale(2)},
   footerHint: {
     flex: 1,
-    fontSize: 13,
+    flexShrink: 1,
+    fontSize: moderateScale(13),
     color: colors.muted,
-    lineHeight: 18,
+    lineHeight: moderateScale(18),
   },
   link: {
     color: colors.green,
     fontWeight: '600',
   },
   versionText: {
-    marginTop: spacing.lg,
-    fontSize: 12,
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+    fontSize: moderateScale(12),
     fontWeight: '600',
     color: colors.mutedLight,
     textAlign: 'center',

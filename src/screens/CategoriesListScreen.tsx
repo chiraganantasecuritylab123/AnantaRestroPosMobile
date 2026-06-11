@@ -1,12 +1,12 @@
 import React, {useMemo, useState} from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Modal,
   Pressable,
   RefreshControl,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -27,13 +27,23 @@ import {handleProfileStackBack} from '../navigation/profileStackBack';
 import {
   Card,
   CloseIcon,
+  EditIcon,
   GradientButton,
   GridIcon,
   SearchIcon,
   TopHeader,
   TopHeaderAction,
+  TrashIcon,
 } from '../components/ui';
+import {showDialog} from '../context/DialogProvider';
 import {colors, radii, spacing} from '../theme';
+import {
+  isTablet,
+  maxContentWidth,
+  moderateScale,
+  scale,
+  verticalScale,
+} from '../utils/responsive';
 
 type Props = NativeStackScreenProps<ProfileStackParamList, 'CategoriesList'>;
 
@@ -102,22 +112,22 @@ export const CategoriesListScreen: React.FC<Props> = ({navigation, route}) => {
   const onSaveCategory = async () => {
     const title = titleInput.trim();
     if (!title) {
-      Alert.alert('Category', 'Enter a category name.');
+      showDialog('Category', 'Enter a category name.');
       return;
     }
 
     try {
       if (editingCategory) {
         const res = await updateCategory({id: editingCategory.id, title}).unwrap();
-        Alert.alert('Updated', res.message ?? 'Category updated.');
+        showDialog('Updated', res.message ?? 'Category updated.');
       } else {
         const res = await createCategory({title}).unwrap();
-        Alert.alert('Created', res.message ?? 'Category created.');
+        showDialog('Created', res.message ?? 'Category created.');
       }
       closeForm();
     } catch (e: unknown) {
       const err = e as {data?: {message?: string}};
-      Alert.alert(
+      showDialog(
         editingCategory ? 'Update failed' : 'Create failed',
         err?.data?.message ?? 'Please try again.',
       );
@@ -134,7 +144,7 @@ export const CategoriesListScreen: React.FC<Props> = ({navigation, route}) => {
       }).unwrap();
     } catch (e: unknown) {
       const err = e as {data?: {message?: string}};
-      Alert.alert(
+      showDialog(
         'Visibility',
         err?.data?.message ?? 'Could not update category visibility.',
       );
@@ -144,7 +154,7 @@ export const CategoriesListScreen: React.FC<Props> = ({navigation, route}) => {
   };
 
   const onDelete = (category: SettingsCategory) => {
-    Alert.alert(
+    showDialog(
       'Delete category',
       `Remove "${category.title}"? Menu items in this category may be affected.`,
       [
@@ -156,10 +166,10 @@ export const CategoriesListScreen: React.FC<Props> = ({navigation, route}) => {
             setBusyId(category.id);
             try {
               const res = await deleteCategory({id: category.id}).unwrap();
-              Alert.alert('Deleted', res.message ?? 'Category deleted.');
+              showDialog('Deleted', res.message ?? 'Category deleted.');
             } catch (e: unknown) {
               const err = e as {data?: {message?: string}};
-              Alert.alert(
+              showDialog(
                 'Delete failed',
                 err?.data?.message ?? 'Could not delete category.',
               );
@@ -189,9 +199,8 @@ export const CategoriesListScreen: React.FC<Props> = ({navigation, route}) => {
         </View>
       </View>
 
-      <Card style={styles.toolsCard}>
         <View style={styles.searchWrap}>
-          <SearchIcon size={18} color={colors.muted} />
+          <SearchIcon size={moderateScale(18)} color={colors.muted} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search categories…"
@@ -200,10 +209,8 @@ export const CategoriesListScreen: React.FC<Props> = ({navigation, route}) => {
             onChangeText={setQuery}
           />
         </View>
-        <Text style={styles.resultCount}>
-          {categories.length} categor{categories.length === 1 ? 'y' : 'ies'}
-        </Text>
-      </Card>
+      {/* <Card style={styles.toolsCard}>
+      </Card> */}
     </View>
   );
 
@@ -226,7 +233,7 @@ export const CategoriesListScreen: React.FC<Props> = ({navigation, route}) => {
         ) : isError ? (
           <View style={styles.center}>
             <Card style={styles.emptyCard}>
-              <GridIcon size={44} color={colors.muted} />
+              <GridIcon size={moderateScale(44)} color={colors.muted} />
               <Text style={styles.emptyTitle}>Could not load categories</Text>
               <Text style={styles.emptyText}>
                 Check your connection and try again.
@@ -240,7 +247,14 @@ export const CategoriesListScreen: React.FC<Props> = ({navigation, route}) => {
           <FlatList
             data={categories}
             keyExtractor={item => item.id}
-            contentContainerStyle={styles.listContent}
+            contentContainerStyle={[
+              styles.listContent,
+              isTablet() && {
+                maxWidth: maxContentWidth(),
+                width: '100%',
+                alignSelf: 'center',
+              },
+            ]}
             ListHeaderComponent={listHeader}
             refreshControl={
               <RefreshControl
@@ -252,7 +266,7 @@ export const CategoriesListScreen: React.FC<Props> = ({navigation, route}) => {
             }
             ListEmptyComponent={
               <Card style={styles.emptyCard}>
-                <GridIcon size={44} color={colors.muted} />
+                <GridIcon size={moderateScale(44)} color={colors.muted} />
                 <Text style={styles.emptyTitle}>No categories yet</Text>
                 <Text style={styles.emptyText}>
                   {query.trim()
@@ -273,7 +287,7 @@ export const CategoriesListScreen: React.FC<Props> = ({navigation, route}) => {
                 <Card style={styles.rowCard}>
                   <View style={styles.rowTop}>
                     <View style={styles.rowIcon}>
-                      <GridIcon size={20} color={colors.navy} />
+                      <GridIcon size={moderateScale(20)} color={colors.navy} />
                     </View>
                     <View style={styles.rowBody}>
                       <Text style={styles.rowTitle} numberOfLines={2}>
@@ -296,62 +310,38 @@ export const CategoriesListScreen: React.FC<Props> = ({navigation, route}) => {
                   </View>
 
                   <View style={styles.rowActions}>
-                    <View style={styles.onOffControl}>
-                      <TouchableOpacity
-                        style={[
-                          styles.onOffBtn,
-                          styles.onOffBtnLeft,
-                          enabled && styles.onOffBtnActive,
-                        ]}
-                        onPress={() => {
-                          if (!enabled) {
+                    <View style={styles.visibilitySwitchRow}>
+                      <Text style={styles.visibilitySwitchLabel}>Visible</Text>
+                      <Switch
+                        value={enabled}
+                        onValueChange={value => {
+                          if (value !== enabled) {
                             void onToggleVisibility(item);
                           }
                         }}
                         disabled={rowBusy}
-                        activeOpacity={0.85}>
-                        <Text
-                          style={[
-                            styles.onOffBtnText,
-                            enabled && styles.onOffBtnTextActive,
-                          ]}>
-                          ON
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[
-                          styles.onOffBtn,
-                          styles.onOffBtnRight,
-                          !enabled && styles.onOffBtnActiveOff,
-                        ]}
-                        onPress={() => {
-                          if (enabled) {
-                            void onToggleVisibility(item);
-                          }
+                        trackColor={{
+                          false: colors.border,
+                          true: `${colors.green}55`,
                         }}
-                        disabled={rowBusy}
-                        activeOpacity={0.85}>
-                        <Text
-                          style={[
-                            styles.onOffBtnText,
-                            !enabled && styles.onOffBtnTextActive,
-                          ]}>
-                          OFF
-                        </Text>
-                      </TouchableOpacity>
+                        thumbColor={enabled ? colors.green : colors.white}
+                        ios_backgroundColor={colors.border}
+                      />
                     </View>
 
                     <TouchableOpacity
                       style={styles.actionBtn}
                       onPress={() => openEdit(item)}
-                      disabled={rowBusy}>
-                      <Text style={styles.actionBtnText}>Edit</Text>
+                      disabled={rowBusy}
+                      accessibilityLabel="Edit category">
+                      <EditIcon size={moderateScale(18)} color={colors.navy} />
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.actionBtn, styles.actionBtnDanger]}
                       onPress={() => onDelete(item)}
-                      disabled={rowBusy}>
-                      <Text style={styles.actionBtnTextDanger}>Delete</Text>
+                      disabled={rowBusy}
+                      accessibilityLabel="Delete category">
+                      <TrashIcon size={moderateScale(18)} color={colors.error} />
                     </TouchableOpacity>
                   </View>
 
@@ -385,7 +375,7 @@ export const CategoriesListScreen: React.FC<Props> = ({navigation, route}) => {
                 style={styles.modalCloseBtn}
                 onPress={closeForm}
                 hitSlop={8}>
-                <CloseIcon size={22} color={colors.navy} />
+                <CloseIcon size={moderateScale(22)} color={colors.navy} />
               </TouchableOpacity>
             </View>
             <Text style={styles.fieldLabel}>Category name</Text>
@@ -432,7 +422,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxl,
     gap: spacing.md,
   },
-  listHeader: {gap: spacing.md, marginBottom: spacing.sm},
+  listHeader: {gap: spacing.md, marginBottom: spacing.xs},
   statsRow: {
     flexDirection: 'row',
     gap: spacing.sm,
@@ -448,13 +438,13 @@ const styles = StyleSheet.create({
   statEnabled: {backgroundColor: '#DCFCE7'},
   statHidden: {backgroundColor: '#F3F4F6'},
   statValue: {
-    fontSize: 22,
+    fontSize: moderateScale(22),
     fontWeight: '800',
     color: colors.navy,
   },
   statLabel: {
-    marginTop: 2,
-    fontSize: 11,
+    marginTop: verticalScale(2),
+    fontSize: moderateScale(11),
     fontWeight: '700',
     color: colors.muted,
     textTransform: 'uppercase',
@@ -469,16 +459,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
+    marginTop: spacing.xs,
   },
   searchInput: {
     flex: 1,
-    paddingVertical: 12,
-    fontSize: 15,
+    paddingVertical: verticalScale(12),
+    fontSize: moderateScale(15),
     color: colors.navy,
   },
   resultCount: {
     marginTop: spacing.sm,
-    fontSize: 12,
+    fontSize: moderateScale(12),
     color: colors.muted,
     fontWeight: '600',
   },
@@ -489,29 +480,29 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   rowIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: scale(42),
+    height: scale(42),
+    borderRadius: scale(21),
     backgroundColor: '#EDE9FE',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  rowBody: {flex: 1},
+  rowBody: {flex: 1, minWidth: 0},
   rowTitle: {
-    fontSize: 17,
+    fontSize: moderateScale(17),
     fontWeight: '700',
     color: colors.navy,
   },
   statusPill: {
     alignSelf: 'flex-start',
     marginTop: spacing.sm,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: scale(10),
+    paddingVertical: verticalScale(4),
     borderRadius: radii.pill,
   },
   statusEnabled: {backgroundColor: '#DCFCE7'},
   statusHidden: {backgroundColor: '#F3F4F6'},
-  statusText: {fontSize: 11, fontWeight: '700'},
+  statusText: {fontSize: moderateScale(11), fontWeight: '700'},
   statusTextEnabled: {color: '#15803D'},
   statusTextHidden: {color: colors.muted},
   rowActions: {
@@ -519,55 +510,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     marginTop: spacing.lg,
-    flexWrap: 'wrap',
   },
-  onOffControl: {
+  visibilitySwitchRow: {
+    flex: 1,
     flexDirection: 'row',
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden',
-    backgroundColor: colors.borderLight,
-  },
-  onOffBtn: {
-    minWidth: 44,
-    paddingVertical: 8,
-    paddingHorizontal: spacing.md,
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.borderLight,
+    gap: spacing.sm,
+    minWidth: 0,
   },
-  onOffBtnLeft: {
-    borderRightWidth: 1,
-    borderRightColor: colors.border,
-  },
-  onOffBtnRight: {},
-  onOffBtnActive: {backgroundColor: colors.green},
-  onOffBtnActiveOff: {backgroundColor: colors.navy},
-  onOffBtnText: {
-    fontSize: 12,
-    fontWeight: '800',
+  visibilitySwitchLabel: {
+    fontSize: moderateScale(13),
+    fontWeight: '700',
     color: colors.muted,
-    letterSpacing: 0.4,
   },
-  onOffBtnTextActive: {color: colors.white},
   actionBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: spacing.md,
+    width: scale(40),
+    height: scale(40),
     borderRadius: radii.md,
     backgroundColor: '#DBEAFE',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   actionBtnDanger: {backgroundColor: '#FEE2E2'},
-  actionBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.navy,
-  },
-  actionBtnTextDanger: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.error,
-  },
   rowLoader: {marginTop: spacing.sm},
   emptyCard: {
     alignItems: 'center',
@@ -575,20 +539,20 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   emptyTitle: {
-    fontSize: 18,
+    fontSize: moderateScale(18),
     fontWeight: '800',
     color: colors.navy,
     textAlign: 'center',
   },
   emptyText: {
-    fontSize: 14,
+    fontSize: moderateScale(14),
     color: colors.muted,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: moderateScale(20),
   },
   retryBtn: {
     marginTop: spacing.md,
-    paddingVertical: 10,
+    paddingVertical: verticalScale(10),
     paddingHorizontal: spacing.lg,
     borderRadius: radii.pill,
     backgroundColor: colors.green,
@@ -596,7 +560,7 @@ const styles = StyleSheet.create({
   retryText: {
     color: colors.white,
     fontWeight: '700',
-    fontSize: 14,
+    fontSize: moderateScale(14),
   },
   modalBackdrop: {
     flex: 1,
@@ -612,9 +576,9 @@ const styles = StyleSheet.create({
   },
   modalHandle: {
     alignSelf: 'center',
-    width: 40,
-    height: 4,
-    borderRadius: 2,
+    width: scale(40),
+    height: verticalScale(4),
+    borderRadius: scale(2),
     backgroundColor: colors.border,
     marginTop: spacing.sm,
     marginBottom: spacing.md,
@@ -626,20 +590,20 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: moderateScale(20),
     fontWeight: '800',
     color: colors.navy,
   },
   modalCloseBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: scale(36),
+    height: scale(36),
+    borderRadius: scale(18),
     backgroundColor: colors.borderLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
   fieldLabel: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     fontWeight: '700',
     color: colors.muted,
     marginBottom: spacing.xs,
@@ -649,8 +613,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: radii.lg,
     paddingHorizontal: spacing.md,
-    paddingVertical: 12,
-    fontSize: 16,
+    paddingVertical: verticalScale(12),
+    fontSize: moderateScale(16),
     color: colors.navy,
     backgroundColor: colors.white,
     marginBottom: spacing.lg,

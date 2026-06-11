@@ -47,6 +47,58 @@ export function parseUrlParts(url: string): {
   }
 }
 
+type RnFormDataPart = {
+  fieldName?: string;
+  uri?: string;
+  name?: string;
+  type?: string;
+  string?: string;
+};
+
+function appendFormDataPart(
+  parts: string[],
+  key: string,
+  value: unknown,
+): void {
+  if (typeof value === 'object' && value != null && 'uri' in value) {
+    const file = value as {uri?: string; name?: string; type?: string};
+    parts.push(
+      `${key}: [file ${file.name ?? 'blob'} ${file.type ?? ''} ${file.uri ?? ''}]`,
+    );
+    return;
+  }
+  parts.push(`${key}: ${String(value)}`);
+}
+
+function formDataToLogString(body: FormData): string {
+  const parts: string[] = [];
+
+  if (typeof body.forEach === 'function') {
+    body.forEach((value, key) => {
+      appendFormDataPart(parts, key, value);
+    });
+    return parts.length ? parts.join('\n') : '[FormData empty]';
+  }
+
+  const getParts = (body as FormData & {getParts?: () => RnFormDataPart[]})
+    .getParts;
+  if (typeof getParts === 'function') {
+    for (const part of getParts.call(body)) {
+      const key = part.fieldName ?? 'field';
+      if (part.uri) {
+        parts.push(
+          `${key}: [file ${part.name ?? 'blob'} ${part.type ?? ''} ${part.uri}]`,
+        );
+      } else {
+        parts.push(`${key}: ${part.string ?? ''}`);
+      }
+    }
+    return parts.length ? parts.join('\n') : '[FormData empty]';
+  }
+
+  return '[FormData]';
+}
+
 export async function bodyToLogString(body: unknown): Promise<string | undefined> {
   if (body == null) {
     return undefined;
@@ -55,18 +107,7 @@ export async function bodyToLogString(body: unknown): Promise<string | undefined
     return body;
   }
   if (typeof FormData !== 'undefined' && body instanceof FormData) {
-    const parts: string[] = [];
-    body.forEach((value, key) => {
-      if (typeof value === 'object' && value != null && 'uri' in value) {
-        const file = value as {uri?: string; name?: string; type?: string};
-        parts.push(
-          `${key}: [file ${file.name ?? 'blob'} ${file.type ?? ''} ${file.uri ?? ''}]`,
-        );
-      } else {
-        parts.push(`${key}: ${String(value)}`);
-      }
-    });
-    return parts.length ? parts.join('\n') : '[FormData empty]';
+    return formDataToLogString(body);
   }
   if (typeof body === 'object') {
     try {

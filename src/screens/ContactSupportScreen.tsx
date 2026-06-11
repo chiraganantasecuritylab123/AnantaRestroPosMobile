@@ -14,6 +14,11 @@ import {useGetConfigQuery} from '../services/configApi';
 import {openExternalUrl} from '../utils/openExternalUrl';
 import {colors, cardShadow, radii, spacing, typography} from '../theme';
 import type {ProfileStackParamList} from '../navigation/types';
+import {
+  maxContentWidth,
+  moderateScale,
+  verticalScale,
+} from '../utils/responsive';
 
 type Props = NativeStackScreenProps<ProfileStackParamList, 'ContactSupport'>;
 
@@ -41,7 +46,8 @@ export const ContactSupportScreen: React.FC<Props> = ({navigation}) => {
         <TopHeader title="Contact support" onBack={onBack} />
         <ScrollView
           contentContainerStyle={styles.scroll}
-          showsVerticalScrollIndicator={false}>
+          showsVerticalScrollIndicator={false}
+          style={styles.scrollView}>
           <Text style={styles.intro}>
             Need help with billing, orders, or your account? Reach our support
             team using the options below.
@@ -126,7 +132,7 @@ function SupportChannelCard({
     <Card style={styles.channelCard}>
       <View style={styles.channelHeader}>
         <View style={[styles.channelIcon, {backgroundColor: iconBg}]}>
-          <Icon name={iconName} size={22} color={colors.navy} />
+          <Icon name={iconName} size={moderateScale(22)} color={colors.navy} />
         </View>
         <View style={styles.channelBody}>
           <Text style={styles.channelTitle}>{title}</Text>
@@ -168,14 +174,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAF8',
   },
   safe: {flex: 1},
+  scrollView: {
+    width: '100%',
+    alignSelf: 'center',
+    maxWidth: maxContentWidth(),
+  },
   scroll: {
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.xxxl,
   },
   intro: {
     ...typography.body,
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: moderateScale(15),
+    lineHeight: moderateScale(22),
     color: colors.muted,
     marginBottom: spacing.xl,
   },
@@ -189,31 +200,34 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   channelIcon: {
-    width: 48,
-    height: 48,
+    width: moderateScale(48),
+    height: moderateScale(48),
     borderRadius: radii.md,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
-  channelBody: {flex: 1},
+  channelBody: {flex: 1, flexShrink: 1},
   channelTitle: {
-    fontSize: 12,
+    fontSize: moderateScale(12),
     fontWeight: '800',
     color: colors.muted,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
   channelValue: {
-    marginTop: 4,
-    fontSize: 18,
+    marginTop: verticalScale(4),
+    fontSize: moderateScale(18),
     fontWeight: '800',
     color: colors.navy,
+    flexShrink: 1,
   },
   channelHint: {
-    marginTop: 6,
-    fontSize: 13,
-    lineHeight: 19,
+    marginTop: verticalScale(6),
+    fontSize: moderateScale(13),
+    lineHeight: moderateScale(19),
     color: colors.muted,
+    flexShrink: 1,
   },
   actionRow: {
     flexDirection: 'row',
@@ -224,7 +238,7 @@ const styles = StyleSheet.create({
   actionBtn: {
     backgroundColor: colors.green,
     borderRadius: radii.md,
-    paddingVertical: 12,
+    paddingVertical: verticalScale(12),
     paddingHorizontal: spacing.lg,
   },
   actionBtnSecondary: {
@@ -237,7 +251,7 @@ const styles = StyleSheet.create({
   },
   actionBtnText: {
     color: colors.white,
-    fontSize: 14,
+    fontSize: moderateScale(14),
     fontWeight: '800',
   },
   actionBtnTextSecondary: {
@@ -253,14 +267,15 @@ const styles = StyleSheet.create({
     borderColor: '#FDE68A',
   },
   tipTitle: {
-    fontSize: 15,
+    fontSize: moderateScale(15),
     fontWeight: '800',
     color: '#92400E',
   },
   tipBody: {
     marginTop: spacing.sm,
-    fontSize: 13,
-    lineHeight: 20,
+    fontSize: moderateScale(13),
+    lineHeight: moderateScale(20),
     color: '#A16207',
+    flexShrink: 1,
   },
 });

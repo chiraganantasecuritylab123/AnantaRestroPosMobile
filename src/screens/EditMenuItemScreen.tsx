@@ -1,8 +1,7 @@
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
-import {useFocusEffect} from '@react-navigation/native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -15,14 +14,15 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   launchCamera,
   launchImageLibrary,
   type Asset,
 } from 'react-native-image-picker';
-import type {NativeStackScreenProps} from '@react-navigation/native-stack';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
+  menuItemImageChanged,
   menuItemImageValue,
   resolveMediaUrl,
   useCreateTaxMutation,
@@ -31,11 +31,19 @@ import {
   useUpdateMenuItemMutation,
   useUpdateMenuItemStockSettingsMutation,
   useUploadImageMutation,
+  useUploadMenuItemPhotoMutation,
 } from '../services/menuApi';
-import {useGetPosInitQuery} from '../services/posApi';
-import type {ProfileStackParamList} from '../navigation/types';
-import {CameraIcon, Card, CloseIcon, GradientButton, TopHeader} from '../components/ui';
-import {cardShadow, colors, radii, spacing} from '../theme';
+import { useGetPosInitQuery } from '../services/posApi';
+import type { ProfileStackParamList } from '../navigation/types';
+import { CameraIcon, Card, CloseIcon, GradientButton, TopHeader } from '../components/ui';
+import { showDialog } from '../context/DialogProvider';
+import { cardShadow, colors, radii, spacing } from '../theme';
+import {
+  maxContentWidth,
+  moderateScale,
+  scale,
+  verticalScale,
+} from '../utils/responsive';
 import {
   ensureCameraPermission,
   ensureGalleryPermission,
@@ -50,7 +58,7 @@ function assetFileMeta(asset: Asset) {
     asset.fileName ??
     `menu-${Date.now()}.${(asset.type ?? 'image/jpeg').split('/')[1] || 'jpg'}`;
   const mimeType = asset.type ?? 'image/jpeg';
-  return {uri, fileName, mimeType};
+  return { uri, fileName, mimeType };
 }
 
 function readAutomaticInventoryEnabled(
@@ -67,8 +75,8 @@ function readAutomaticInventoryEnabled(
   );
 }
 
-export const EditMenuItemScreen: React.FC<Props> = ({navigation, route}) => {
-  const {menuItemId, image: initialImage} = route.params;
+export const EditMenuItemScreen: React.FC<Props> = ({ navigation, route }) => {
+  const { menuItemId, image: initialImage } = route.params;
 
   const [title, setTitle] = useState(route.params.title);
   const [description, setDescription] = useState(route.params.description);
@@ -102,7 +110,7 @@ export const EditMenuItemScreen: React.FC<Props> = ({navigation, route}) => {
     isError: categoriesApiError,
     refetch: refetchCategories,
   } = useGetCategoriesQuery();
-  const {data: posInit} = useGetPosInitQuery(undefined, {
+  const { data: posInit } = useGetPosInitQuery(undefined, {
     skip: !categoriesApiError && (apiCategories?.length ?? 0) > 0,
   });
 
@@ -113,13 +121,15 @@ export const EditMenuItemScreen: React.FC<Props> = ({navigation, route}) => {
     refetch: refetchTaxes,
   } = useGetTaxesQuery();
 
-  const [createTax, {isLoading: creatingTax}] = useCreateTaxMutation();
-  const [updateMenuItem, {isLoading: savingMenu}] = useUpdateMenuItemMutation();
-  const [updateMenuItemStockSettings, {isLoading: savingStock}] =
+  const [createTax, { isLoading: creatingTax }] = useCreateTaxMutation();
+  const [updateMenuItem, { isLoading: savingMenu }] = useUpdateMenuItemMutation();
+  const [updateMenuItemStockSettings, { isLoading: savingStock }] =
     useUpdateMenuItemStockSettingsMutation();
-  const [uploadImage, {isLoading: uploadingImage}] = useUploadImageMutation();
+  const [uploadMenuItemPhoto, { isLoading: savingPhoto }] =
+    useUploadMenuItemPhotoMutation();
+  const [uploadImage, { isLoading: uploadingImage }] = useUploadImageMutation();
 
-  const saving = savingMenu || savingStock;
+  const saving = savingMenu || savingStock || savingPhoto;
 
   useEffect(() => {
     if (route.params.automaticInventoryEnabled !== undefined) {
@@ -143,10 +153,10 @@ export const EditMenuItemScreen: React.FC<Props> = ({navigation, route}) => {
     const list = apiCategories?.length
       ? apiCategories
       : (posInit?.categories ?? []).map(c => ({
-          id: String(c.id),
-          title: c.title,
-          is_enabled: c.is_enabled,
-        }));
+        id: String(c.id),
+        title: c.title,
+        is_enabled: c.is_enabled,
+      }));
     return list.filter(
       c =>
         (c.is_enabled ?? c.isEnabled ?? true) !== false || c.id === categoryId,
@@ -167,9 +177,9 @@ export const EditMenuItemScreen: React.FC<Props> = ({navigation, route}) => {
   };
 
   const uploadPickedAsset = async (asset: Asset) => {
-    const {uri, fileName, mimeType} = assetFileMeta(asset);
+    const { uri, fileName, mimeType } = assetFileMeta(asset);
     if (!uri) {
-      Alert.alert('Image', 'Could not read the selected photo.');
+      showDialog('Image', 'Could not read the selected photo.');
       return;
     }
 
@@ -178,7 +188,7 @@ export const EditMenuItemScreen: React.FC<Props> = ({navigation, route}) => {
     setUploadedFileName('');
 
     try {
-      const res = await uploadImage({uri, fileName, mimeType}).unwrap();
+      const res = await uploadImage({ uri, fileName, mimeType }).unwrap();
       setUploadedImagePath(res.url);
       setUploadedFileName(res.filename ?? fileName);
     } catch (e: unknown) {
@@ -186,8 +196,8 @@ export const EditMenuItemScreen: React.FC<Props> = ({navigation, route}) => {
       if (initialImage?.trim()) {
         setUploadedImagePath(initialImage.trim());
       }
-      const err = e as {error?: string; data?: {message?: string}};
-      Alert.alert(
+      const err = e as { error?: string; data?: { message?: string } };
+      showDialog(
         'Upload failed',
         err?.data?.message ?? err?.error ?? 'Could not upload image.',
       );
@@ -208,7 +218,7 @@ export const EditMenuItemScreen: React.FC<Props> = ({navigation, route}) => {
 
     if (result.errorCode) {
       if (!handlePickerPermissionError(result.errorCode, 'gallery')) {
-        Alert.alert(
+        showDialog(
           'Gallery',
           result.errorMessage ?? 'Could not open photo library.',
         );
@@ -236,11 +246,11 @@ export const EditMenuItemScreen: React.FC<Props> = ({navigation, route}) => {
 
     if (result.errorCode) {
       if (result.errorCode === 'camera_unavailable') {
-        Alert.alert('Camera', 'Camera is not available on this device.');
+        showDialog('Camera', 'Camera is not available on this device.');
         return;
       }
       if (!handlePickerPermissionError(result.errorCode, 'camera')) {
-        Alert.alert('Camera', result.errorMessage ?? 'Could not open camera.');
+        showDialog('Camera', result.errorMessage ?? 'Could not open camera.');
       }
       return;
     }
@@ -252,10 +262,10 @@ export const EditMenuItemScreen: React.FC<Props> = ({navigation, route}) => {
   };
 
   const onChooseImage = () => {
-    Alert.alert('Menu image', 'Choose a source', [
-      {text: 'Gallery', onPress: () => void onPickFromGallery()},
-      {text: 'Camera', onPress: () => void onTakePhoto()},
-      {text: 'Cancel', style: 'cancel'},
+    showDialog('Menu image', 'Choose a source', [
+      { text: 'Gallery', onPress: () => void onPickFromGallery() },
+      { text: 'Camera', onPress: () => void onTakePhoto() },
+      { text: 'Cancel', style: 'cancel' },
     ]);
   };
 
@@ -270,7 +280,7 @@ export const EditMenuItemScreen: React.FC<Props> = ({navigation, route}) => {
     const nextTitle = newTaxTitle.trim();
     const rate = newTaxRate.trim();
     if (!nextTitle || !rate) {
-      Alert.alert('Tax', 'Enter tax name and rate.');
+      showDialog('Tax', 'Enter tax name and rate.');
       return;
     }
     try {
@@ -285,36 +295,36 @@ export const EditMenuItemScreen: React.FC<Props> = ({navigation, route}) => {
       setTaxModalOpen(false);
       refetchTaxes();
     } catch (e: unknown) {
-      const err = e as {data?: {message?: string}};
-      Alert.alert('Could not add tax', err?.data?.message ?? 'Please try again.');
+      const err = e as { data?: { message?: string } };
+      showDialog('Could not add tax', err?.data?.message ?? 'Please try again.');
     }
   };
 
   const onSubmit = async () => {
     if (!title.trim()) {
-      Alert.alert('Menu item', 'Enter item name.');
+      showDialog('Menu item', 'Enter item name.');
       return;
     }
     if (!price.trim() || !netPrice.trim()) {
-      Alert.alert('Menu item', 'Enter price and net price.');
+      showDialog('Menu item', 'Enter price and net price.');
       return;
     }
     if (!categoryId) {
-      Alert.alert('Menu item', 'Select a category.');
+      showDialog('Menu item', 'Select a category.');
       return;
     }
     if (!taxId) {
-      Alert.alert('Menu item', 'Select a tax.');
+      showDialog('Menu item', 'Select a tax.');
       return;
     }
     if (!uploadedImagePath.trim()) {
-      Alert.alert('Menu item', 'Add a photo before saving.');
+      showDialog('Menu item', 'Add a photo before saving.');
       return;
     }
 
     const image = menuItemImageValue(uploadedImagePath);
     if (!image) {
-      Alert.alert('Menu item', 'Uploaded image URL is invalid.');
+      showDialog('Menu item', 'Uploaded image URL is invalid.');
       return;
     }
 
@@ -325,25 +335,35 @@ export const EditMenuItemScreen: React.FC<Props> = ({navigation, route}) => {
       netPrice: netPrice.trim(),
       categoryId,
       taxId,
-      image,
     };
 
+    const imageChanged = menuItemImageChanged(uploadedImagePath, initialImage);
+
     try {
-      const [menuRes] = await Promise.all([
-        updateMenuItem({id: menuItemId, ...body}).unwrap(),
+      const tasks: Array<Promise<unknown>> = [
+        updateMenuItem({ id: menuItemId, ...body }).unwrap(),
         updateMenuItemStockSettings({
           id: menuItemId,
           automaticInventoryEnabled,
         }).unwrap(),
-      ]);
-      Alert.alert('Success', menuRes.message ?? 'Menu item updated.', [
-        {text: 'OK', onPress: () => navigation.goBack()},
+      ];
+
+      if (imageChanged) {
+        tasks.push(
+          uploadMenuItemPhoto({ id: menuItemId, image }).unwrap(),
+        );
+      }
+
+      const results = await Promise.all(tasks);
+      const menuRes = results[0] as { message?: string };
+      showDialog('Success', menuRes.message ?? 'Menu item updated.', [
+        { text: 'OK', onPress: () => navigation.goBack() },
       ]);
     } catch (e: unknown) {
-      const err = e as {data?: {message?: string}};
-      Alert.alert(
+      const err = e as { data?: { message?: string }; error?: string };
+      showDialog(
         'Update failed',
-        err?.data?.message ?? 'Please check fields and try again.',
+        err?.data?.message ?? err?.error ?? 'Please check fields and try again.',
       );
     }
   };
@@ -372,6 +392,7 @@ export const EditMenuItemScreen: React.FC<Props> = ({navigation, route}) => {
           />
 
           <ScrollView
+            style={styles.scrollView}
             contentContainerStyle={styles.scroll}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}>
@@ -507,14 +528,17 @@ export const EditMenuItemScreen: React.FC<Props> = ({navigation, route}) => {
                   ]}>
                   {previewImage ? (
                     <Image
-                      source={{uri: previewImage}}
+                      source={{ uri: previewImage }}
                       style={styles.previewImage}
                       resizeMode="cover"
                     />
                   ) : (
                     <View style={styles.previewEmpty}>
                       <View style={styles.previewIconCircle}>
-                        <CameraIcon size={32} color={colors.muted} />
+                        <CameraIcon
+                          size={moderateScale(32)}
+                          color={colors.muted}
+                        />
                       </View>
                       <Text style={styles.previewEmptyTitle}>Add dish photo</Text>
                       <Text style={styles.previewEmptyText}>
@@ -584,7 +608,7 @@ export const EditMenuItemScreen: React.FC<Props> = ({navigation, route}) => {
                     onPress={() => setAutomaticInventoryEnabled(true)}
                     activeOpacity={0.85}
                     accessibilityRole="button"
-                    accessibilityState={{selected: automaticInventoryEnabled}}
+                    accessibilityState={{ selected: automaticInventoryEnabled }}
                     accessibilityLabel="Automatic inventory on">
                     <Text
                       style={[
@@ -603,7 +627,7 @@ export const EditMenuItemScreen: React.FC<Props> = ({navigation, route}) => {
                     onPress={() => setAutomaticInventoryEnabled(false)}
                     activeOpacity={0.85}
                     accessibilityRole="button"
-                    accessibilityState={{selected: !automaticInventoryEnabled}}
+                    accessibilityState={{ selected: !automaticInventoryEnabled }}
                     accessibilityLabel="Automatic inventory off">
                     <Text
                       style={[
@@ -616,17 +640,16 @@ export const EditMenuItemScreen: React.FC<Props> = ({navigation, route}) => {
                 </View>
               </View>
             </SectionCard>
+            <View style={styles.footer}>
+              <GradientButton
+                title={saving ? 'Saving…' : 'Save changes'}
+                onPress={onSubmit}
+                loading={saving}
+                disabled={saving || !canSave}
+                showArrow={false}
+              />
+            </View>
           </ScrollView>
-
-          <View style={styles.footer}>
-            <GradientButton
-              title={saving ? 'Saving…' : 'Save changes'}
-              onPress={onSubmit}
-              loading={saving}
-              disabled={saving || !canSave}
-              showArrow={false}
-            />
-          </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
 
@@ -709,7 +732,7 @@ function SectionCard({
           </View>
         </View>
         {actionLabel && onAction ? (
-          <TouchableOpacity onPress={onAction} hitSlop={8}>
+          <TouchableOpacity onPress={onAction} hitSlop={scale(8)}>
             <Text style={styles.sectionAction}>{actionLabel}</Text>
           </TouchableOpacity>
         ) : null}
@@ -797,8 +820,8 @@ function FormModal({
             <TouchableOpacity
               style={styles.modalCloseBtn}
               onPress={onClose}
-              hitSlop={8}>
-              <CloseIcon size={22} color={colors.navy} />
+              hitSlop={scale(8)}>
+              <CloseIcon size={moderateScale(22)} color={colors.navy} />
             </TouchableOpacity>
           </View>
           {children}
@@ -813,8 +836,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8FAF8',
   },
-  flex: {flex: 1},
-  safe: {flex: 1},
+  flex: { flex: 1 },
+  safe: { flex: 1 },
+  scrollView: {
+    width: '100%',
+    alignSelf: 'center',
+    maxWidth: maxContentWidth(),
+  },
   scroll: {
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.sm,
@@ -844,34 +872,38 @@ const styles = StyleSheet.create({
     paddingRight: spacing.sm,
   },
   stepBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: moderateScale(28),
+    height: moderateScale(28),
+    borderRadius: moderateScale(14),
     backgroundColor: colors.navy,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   stepBadgeText: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     fontWeight: '800',
     color: colors.white,
   },
-  sectionCardTitles: {flex: 1},
+  sectionCardTitles: { flex: 1, flexShrink: 1 },
   sectionCardTitle: {
-    fontSize: 16,
+    fontSize: moderateScale(16),
     fontWeight: '800',
     color: colors.navy,
+    flexShrink: 1,
   },
   sectionCardHint: {
-    marginTop: 2,
-    fontSize: 12,
+    marginTop: verticalScale(2),
+    fontSize: moderateScale(12),
     color: colors.muted,
-    lineHeight: 17,
+    lineHeight: moderateScale(17),
+    flexShrink: 1,
   },
   sectionAction: {
-    fontSize: 14,
+    fontSize: moderateScale(14),
     fontWeight: '700',
     color: colors.green,
+    flexShrink: 0,
   },
   sectionCardBody: {
     padding: spacing.lg,
@@ -880,31 +912,31 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   fieldLabel: {
-    fontSize: 11,
+    fontSize: moderateScale(11),
     fontWeight: '700',
     color: colors.muted,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
-    marginBottom: 8,
+    marginBottom: verticalScale(8),
   },
   input: {
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radii.md,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
+    paddingHorizontal: scale(14),
+    paddingVertical: verticalScale(12),
+    fontSize: moderateScale(16),
     fontWeight: '500',
     color: colors.navy,
   },
   inputMultiline: {
-    minHeight: 96,
+    minHeight: verticalScale(96),
     textAlignVertical: 'top',
   },
   rowFields: {
     flexDirection: 'row',
-    gap: 12,
+    gap: scale(12),
     marginBottom: 0,
   },
   halfField: {
@@ -913,11 +945,11 @@ const styles = StyleSheet.create({
   chipGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: scale(8),
   },
   chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: scale(14),
+    paddingVertical: verticalScale(10),
     borderRadius: radii.pill,
     borderWidth: 1,
     borderColor: colors.border,
@@ -928,9 +960,10 @@ const styles = StyleSheet.create({
     borderColor: colors.green,
   },
   chipText: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     fontWeight: '600',
     color: colors.navy,
+    flexShrink: 1,
   },
   chipTextActive: {
     color: colors.white,
@@ -941,25 +974,28 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     backgroundColor: '#ECFDF5',
     borderRadius: radii.pill,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(6),
     borderWidth: 1,
     borderColor: '#BBF7D0',
   },
   selectedPillText: {
-    fontSize: 12,
+    fontSize: moderateScale(12),
     fontWeight: '700',
     color: colors.greenDark,
+    flexShrink: 1,
   },
   emptyHint: {
-    fontSize: 14,
+    fontSize: moderateScale(14),
     color: colors.muted,
-    lineHeight: 20,
+    lineHeight: moderateScale(20),
+    flexShrink: 1,
   },
   errorHint: {
-    fontSize: 14,
+    fontSize: moderateScale(14),
     color: colors.error,
     fontWeight: '600',
+    flexShrink: 1,
   },
   loader: {
     marginVertical: spacing.md,
@@ -980,7 +1016,7 @@ const styles = StyleSheet.create({
   },
   previewImage: {
     width: '100%',
-    height: '100%',
+    aspectRatio: 4 / 3,
   },
   previewEmpty: {
     flex: 1,
@@ -989,99 +1025,106 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
   },
   previewIconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: moderateScale(56),
+    height: moderateScale(56),
+    borderRadius: moderateScale(28),
     backgroundColor: '#ECFDF5',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.md,
   },
   previewEmptyIcon: {
-    fontSize: 26,
+    fontSize: moderateScale(26),
   },
   previewEmptyTitle: {
-    fontSize: 16,
+    fontSize: moderateScale(16),
     fontWeight: '800',
     color: colors.navy,
+    flexShrink: 1,
   },
   previewEmptyText: {
-    marginTop: 4,
-    fontSize: 13,
+    marginTop: verticalScale(4),
+    fontSize: moderateScale(13),
     color: colors.muted,
     fontWeight: '500',
+    flexShrink: 1,
   },
   previewOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(15, 23, 42, 0.55)',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: scale(8),
   },
   uploadingText: {
     color: colors.white,
-    fontSize: 13,
+    fontSize: moderateScale(13),
     fontWeight: '700',
+    flexShrink: 1,
   },
   imageActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: scale(10),
     marginTop: spacing.lg,
   },
   imageActionBtnPrimary: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: verticalScale(12),
     borderRadius: radii.md,
     backgroundColor: colors.green,
     alignItems: 'center',
   },
   imageActionTextPrimary: {
-    fontSize: 14,
+    fontSize: moderateScale(14),
     fontWeight: '700',
     color: colors.white,
   },
   imageActionBtnOutline: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: verticalScale(12),
+    paddingHorizontal: scale(16),
     borderRadius: radii.md,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.white,
   },
   imageActionTextOutline: {
-    fontSize: 14,
+    fontSize: moderateScale(14),
     fontWeight: '700',
     color: colors.muted,
   },
   uploadedMeta: {
     marginTop: spacing.md,
-    fontSize: 12,
+    fontSize: moderateScale(12),
     color: colors.muted,
-    lineHeight: 18,
+    lineHeight: moderateScale(18),
+    flexShrink: 1,
   },
   imageHint: {
     marginTop: spacing.md,
-    fontSize: 12,
+    fontSize: moderateScale(12),
     color: colors.muted,
-    lineHeight: 18,
+    lineHeight: moderateScale(18),
+    flexShrink: 1,
   },
   stockToggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
   },
-  stockToggleBody: {flex: 1},
+  stockToggleBody: { flex: 1, flexShrink: 1 },
   stockToggleTitle: {
-    fontSize: 15,
+    fontSize: moderateScale(15),
     fontWeight: '700',
     color: colors.navy,
+    flexShrink: 1,
   },
   stockToggleHint: {
-    marginTop: 4,
-    fontSize: 12,
+    marginTop: verticalScale(4),
+    fontSize: moderateScale(12),
     color: colors.muted,
-    lineHeight: 18,
+    lineHeight: moderateScale(18),
+    flexShrink: 1,
   },
   onOffControl: {
     flexDirection: 'row',
@@ -1090,10 +1133,11 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     overflow: 'hidden',
     backgroundColor: colors.borderLight,
+    flexShrink: 0,
   },
   onOffBtn: {
-    minWidth: 52,
-    paddingVertical: 10,
+    minWidth: scale(52),
+    paddingVertical: verticalScale(10),
     paddingHorizontal: spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1111,7 +1155,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.navy,
   },
   onOffBtnText: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     fontWeight: '800',
     color: colors.muted,
     letterSpacing: 0.5,
@@ -1120,11 +1164,7 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
   footer: {
-    padding: spacing.xl,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.white,
-    ...cardShadow,
+    marginVertical: spacing.md,
   },
   modalBackdrop: {
     flex: 1,
@@ -1141,9 +1181,9 @@ const styles = StyleSheet.create({
   },
   modalHandle: {
     alignSelf: 'center',
-    width: 40,
-    height: 4,
-    borderRadius: 2,
+    width: scale(40),
+    height: verticalScale(4),
+    borderRadius: moderateScale(2),
     backgroundColor: colors.border,
     marginTop: spacing.sm,
     marginBottom: spacing.md,
@@ -1155,37 +1195,39 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: moderateScale(18),
     fontWeight: '800',
     color: colors.navy,
+    flexShrink: 1,
   },
   modalCloseBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: moderateScale(36),
+    height: moderateScale(36),
+    borderRadius: moderateScale(18),
     backgroundColor: colors.borderLight,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   modalClose: {
-    fontSize: 16,
+    fontSize: moderateScale(16),
     color: colors.muted,
     fontWeight: '700',
   },
   modalLabel: {
-    fontSize: 12,
+    fontSize: moderateScale(12),
     fontWeight: '700',
     color: colors.muted,
-    marginBottom: 8,
+    marginBottom: verticalScale(8),
   },
   typeRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: scale(8),
     marginBottom: spacing.lg,
   },
   typeChip: {
     flex: 1,
-    paddingVertical: 10,
+    paddingVertical: verticalScale(10),
     borderRadius: radii.md,
     borderWidth: 1,
     borderColor: colors.border,
@@ -1196,10 +1238,11 @@ const styles = StyleSheet.create({
     borderColor: colors.green,
   },
   typeChipText: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     fontWeight: '700',
     color: colors.navy,
     textTransform: 'capitalize',
+    flexShrink: 1,
   },
   typeChipTextActive: {
     color: colors.white,

@@ -163,10 +163,83 @@ export interface InventoryMutationResponse {
   message: string;
 }
 
+export type InventoryDetailPeriod =
+  | 'today'
+  | 'yesterday'
+  | 'this_month'
+  | 'last_month'
+  | 'last_7days';
+
+export type InventoryMovementTypeFilter = 'all' | 'in' | 'out' | 'wastage';
+
+export type StockMovementType = 'IN' | 'OUT' | 'WASTAGE';
+
+export interface InventoryDetailLinkedMenuItem {
+  menu_item_id: string;
+  menu_item_title: string;
+  automatic_inventory_enabled?: boolean;
+}
+
+export interface InventoryMovement {
+  id: string;
+  type: StockMovementType;
+  quantity: string;
+  previous_quantity: string;
+  new_quantity: string;
+  note: string;
+  created_by: string;
+  created_at: string;
+  order_id: string | null;
+  formatted_token: string | null;
+  order: unknown;
+  order_token: string | null;
+  order_display: string | null;
+  remark_display: string | null;
+  updated_by_name: string;
+  is_order_related: boolean;
+}
+
+export interface InventoryDetailSummary {
+  totalIn: number;
+  totalOut: number;
+  totalWastage: number;
+  movementCount: number;
+  currentStock: number;
+}
+
+export interface InventoryDetailResponse {
+  item: InventoryItem & {
+    linked_menu_item?: InventoryDetailLinkedMenuItem | null;
+  };
+  linkedMenuItems: InventoryDetailLinkedMenuItem[];
+  recipes: Array<
+    InventoryDetailLinkedMenuItem & {
+      recipe_quantity?: string;
+      variant_id?: string | null;
+      addon_id?: string | null;
+    }
+  >;
+  summary: InventoryDetailSummary;
+  movements: InventoryMovement[];
+}
+
+export interface InventoryDetailQueryArgs {
+  id: string;
+  type?: InventoryDetailPeriod;
+  movementType?: InventoryMovementTypeFilter;
+}
+
+export interface AddStockMovementRequest {
+  id: string;
+  movementType: StockMovementType;
+  quantity: number;
+  note?: string;
+}
+
 export const inventoryApi = createApi({
   reducerPath: 'inventoryApi',
   baseQuery: baseQueryWithReauthHandling,
-  tagTypes: ['Inventory'],
+  tagTypes: ['Inventory', 'InventoryDetail'],
   endpoints: builder => ({
     getInventory: builder.query<InventoryListResponse, InventoryStatus | void>({
       query: status => ({
@@ -226,13 +299,47 @@ export const inventoryApi = createApi({
       }),
       invalidatesTags: ['Inventory'],
     }),
+    getInventoryDetail: builder.query<
+      InventoryDetailResponse,
+      InventoryDetailQueryArgs
+    >({
+      query: ({id, type = 'last_7days', movementType = 'all'}) => ({
+        url: `/inventory/${id}/detail`,
+        method: 'GET',
+        params: {lang: 'en', type, movementType},
+      }),
+      providesTags: (_result, _error, {id}) => [
+        {type: 'InventoryDetail', id},
+      ],
+    }),
+    addStockMovement: builder.mutation<
+      InventoryMutationResponse,
+      AddStockMovementRequest
+    >({
+      query: ({id, movementType, quantity, note}) => ({
+        url: `/inventory/${id}/add-stock-movement`,
+        method: 'PATCH',
+        params: {lang: 'en'},
+        body: {
+          movementType,
+          quantity,
+          note: note ?? '',
+        },
+      }),
+      invalidatesTags: (_result, _error, {id}) => [
+        'Inventory',
+        {type: 'InventoryDetail', id},
+      ],
+    }),
   }),
 });
 
 export const {
   useGetInventoryQuery,
   useGetLinkableMenuItemsQuery,
+  useGetInventoryDetailQuery,
   useAddInventoryItemMutation,
   useUpdateInventoryItemMutation,
   useDeleteInventoryItemMutation,
+  useAddStockMovementMutation,
 } = inventoryApi;

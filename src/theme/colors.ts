@@ -103,14 +103,21 @@ export function applyBrandingColors(
   return true;
 }
 
-/** Primary brand colors from API config, falling back to themed `colors`. */
+/** Primary and secondary brand colors from API config, falling back to themed `colors`. */
 export function getBrandHeroColors(
-  branding?: {primary_color?: string | null} | null,
+  branding?: {
+    primary_color?: string | null;
+    secondary_color?: string | null;
+  } | null,
 ) {
   const normalized = branding?.primary_color
     ? normalizeHex(branding.primary_color)
     : null;
   const hero = normalized ?? colors.green;
   const heroDark = normalized ? shiftHex(normalized, -30) : colors.greenDark;
-  return {hero, heroDark};
+  const secondaryNormalized = branding?.secondary_color
+    ? normalizeHex(branding.secondary_color)
+    : null;
+  const secondary = secondaryNormalized ?? colors.orange;
+  return {hero, heroDark, secondary};
 }

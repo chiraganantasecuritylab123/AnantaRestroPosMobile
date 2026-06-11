@@ -1,6 +1,5 @@
 import React, {useEffect} from 'react';
 import {
-  Dimensions,
   Image,
   ImageBackground,
   StyleSheet,
@@ -13,42 +12,49 @@ import {SplashLoader} from '../components/ui';
 import {typography} from '../theme';
 import type {AuthStackParamList} from '../navigation/types';
 import {isOnboardingComplete} from '../storage/appStorage';
+import {
+  maxContentWidth,
+  moderateScale,
+  scale,
+  useBrandLogoSize,
+  verticalScale,
+} from '../utils/responsive';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Splash'>;
 
 export const SPLASH_MIN_MS = 2200;
 
-const {width: SCREEN_W} = Dimensions.get('window');
-const LOGO_W = Math.min(SCREEN_W * 0.72, 300);
-const LOGO_H = LOGO_W * 0.55;
+export const SplashContent: React.FC = () => {
+  const logoSize = useBrandLogoSize();
 
-export const SplashContent: React.FC = () => (
-  <ImageBackground
-    source={require('../assets/splash-bg.png')}
-    style={styles.root}
-    resizeMode="cover">
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <View style={styles.main}>
-        <View style={styles.logoBlock}>
-          <Image
-            source={require('../assets/splash-screen-logo.png')}
-            style={styles.logo}
-            resizeMode="contain"
-            accessibilityLabel="Ananta POS logo"
-          />
-          <Text style={styles.tagline}>
-            Smart Billing. Complete Business Control.
-          </Text>
+  return (
+    <ImageBackground
+      source={require('../assets/splash-bg.png')}
+      style={styles.root}
+      resizeMode="cover">
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+        <View style={styles.main}>
+          <View style={styles.logoBlock}>
+            <Image
+              source={require('../assets/splash-screen-logo.png')}
+              style={[styles.logo, logoSize]}
+              resizeMode="contain"
+              accessibilityLabel="Ananta POS logo"
+            />
+            <Text style={styles.tagline}>
+              Smart Billing. Complete Business Control.
+            </Text>
+          </View>
         </View>
-      </View>
 
-      <View style={styles.footer}>
-        <SplashLoader size={52} />
-        <Text style={styles.loadingLabel}>Loading your business…</Text>
-      </View>
-    </SafeAreaView>
-  </ImageBackground>
-);
+        <View style={styles.footer}>
+          <SplashLoader size={moderateScale(52)} />
+          <Text style={styles.loadingLabel}>Loading your business…</Text>
+        </View>
+      </SafeAreaView>
+    </ImageBackground>
+  );
+};
 
 export const SplashScreen: React.FC<Props> = ({navigation}) => {
   useEffect(() => {
@@ -82,34 +88,37 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 28,
+    paddingHorizontal: scale(28),
   },
   logoBlock: {
     alignItems: 'center',
     width: '100%',
+    maxWidth: maxContentWidth(),
   },
   logo: {
-    width: LOGO_W,
-    height: LOGO_H,
+    alignSelf: 'center',
   },
   tagline: {
-    marginTop: 20,
+    marginTop: verticalScale(20),
     ...typography.caption,
-    fontSize: 14,
+    fontSize: moderateScale(14),
     color: '#6B7280',
     textAlign: 'center',
-    lineHeight: 20,
-    paddingHorizontal: 12,
-    maxWidth: 320,
+    lineHeight: moderateScale(20),
+    paddingHorizontal: scale(12),
+    maxWidth: scale(320),
   },
   footer: {
     alignItems: 'center',
-    paddingBottom: 55,
-    paddingTop: 20,
-    gap: 14,
+    paddingBottom: verticalScale(55),
+    paddingTop: verticalScale(20),
+    gap: verticalScale(14),
+    maxWidth: maxContentWidth(),
+    alignSelf: 'center',
+    width: '100%',
   },
   loadingLabel: {
-    fontSize: 14,
+    fontSize: moderateScale(14),
     fontWeight: '500',
     color: '#6B7280',
     letterSpacing: 0.2,

@@ -9,6 +9,9 @@ import {inventoryApi} from './services/inventoryApi';
 import {configApi} from './services/configApi';
 import {fcmApi} from './services/fcmApi';
 import {notificationsApi} from './services/notificationsApi';
+import {salesApi} from './services/salesApi';
+import {storeSettingsApi} from './services/storeSettingsApi';
+import {subscriptionApi} from './services/subscriptionApi';
 import {
   clearPushNotificationsState,
   pushNotificationsReducer,
@@ -23,6 +26,9 @@ import {
   type StoredAuthPayload,
 } from './storage/authStorage';
 import {cartPersistenceMiddleware} from './store/cartPersistenceMiddleware';
+import {sessionLogoutMiddleware} from './store/sessionLogoutMiddleware';
+
+export {performAppLogout} from './store/performAppLogout';
 
 type AuthPersistGetState = () => {
   authToken: {
@@ -59,6 +65,21 @@ const authPersistenceMiddleware =
       }
     }
 
+    if (
+      action?.type === 'authToken/markSubscriptionInactive' ||
+      action?.type === 'authToken/updateSubscriptionActive' ||
+      action?.type === 'authToken/activateSubscription'
+    ) {
+      const state = storeApi.getState().authToken;
+      if (state?.value) {
+        saveAuthToStorage({
+          token: state.value,
+          user: state.user,
+          outletId: state.outletId ?? null,
+        });
+      }
+    }
+
     if (action?.type === 'authToken/logout') {
       clearAuthFromStorage();
       void clearPushNotifications();
@@ -83,6 +104,9 @@ export const store = configureStore({
     [configApi.reducerPath]: configApi.reducer,
     [fcmApi.reducerPath]: fcmApi.reducer,
     [notificationsApi.reducerPath]: notificationsApi.reducer,
+    [salesApi.reducerPath]: salesApi.reducer,
+    [storeSettingsApi.reducerPath]: storeSettingsApi.reducer,
+    [subscriptionApi.reducerPath]: subscriptionApi.reducer,
   },
   middleware: getDefaultMiddleware =>
     getDefaultMiddleware({
@@ -90,6 +114,7 @@ export const store = configureStore({
     }).concat(
       authPersistenceMiddleware as any,
       cartPersistenceMiddleware,
+      sessionLogoutMiddleware,
       authApi.middleware,
       posApi.middleware,
       customerApi.middleware,
@@ -99,6 +124,9 @@ export const store = configureStore({
       configApi.middleware,
       fcmApi.middleware,
       notificationsApi.middleware,
+      salesApi.middleware,
+      storeSettingsApi.middleware,
+      subscriptionApi.middleware,
     ),
 });
 

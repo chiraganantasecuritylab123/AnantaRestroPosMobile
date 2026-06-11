@@ -1,6 +1,7 @@
 import React from 'react';
 import {ConfirmDialog, Icon} from './ui';
 import {colors} from '../theme';
+import {moderateScale} from '../utils/responsive';
 
 type Props = {
   visible: boolean;
@@ -23,7 +24,7 @@ export const OptionalUpdateDialog: React.FC<Props> = ({
     message={`Version ${latestVersion} is available. You are on ${currentVersion}. Update now for the latest fixes and improvements.`}
     confirmLabel="Update"
     cancelLabel="Not now"
-    icon={<Icon name="info" size={26} color={colors.green} />}
+    icon={<Icon name="info" size={moderateScale(26)} color={colors.green} />}
     onConfirm={onUpdate}
     onCancel={onDismiss}
   />

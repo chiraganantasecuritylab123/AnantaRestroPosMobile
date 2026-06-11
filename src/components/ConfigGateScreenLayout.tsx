@@ -10,6 +10,7 @@ import {
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {GradientButton, SplashLoader} from './ui';
 import {colors, radii, spacing, typography} from '../theme';
+import {moderateScale, scale, verticalScale} from '../utils/responsive';
 
 type Props = {
   icon: React.ReactNode;
@@ -28,6 +29,8 @@ type Props = {
   children?: React.ReactNode;
   contentStyle?: ViewStyle;
 };
+
+const ICON_WRAP_SIZE = moderateScale(72);
 
 export const ConfigGateScreenLayout: React.FC<Props> = ({
   icon,
@@ -79,7 +82,7 @@ export const ConfigGateScreenLayout: React.FC<Props> = ({
 
       {primaryAction?.loading ? (
         <View style={styles.loadingRow}>
-          <SplashLoader size={36} />
+          <SplashLoader size={moderateScale(36)} />
         </View>
       ) : null}
     </SafeAreaView>
@@ -97,37 +100,38 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxxl,
   },
   logo: {
-    width: 180,
-    height: 120,
+    width: scale(180),
+    aspectRatio: 1.5,
+    height: undefined,
     marginBottom: spacing.lg,
   },
   iconWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: ICON_WRAP_SIZE,
+    height: ICON_WRAP_SIZE,
+    borderRadius: ICON_WRAP_SIZE / 2,
     backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.lg,
     shadowColor: '#000',
     shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: {width: 0, height: 4},
+    shadowRadius: moderateScale(12),
+    shadowOffset: {width: 0, height: verticalScale(4)},
     elevation: 4,
   },
   title: {
     ...typography.hero,
-    fontSize: 26,
+    fontSize: moderateScale(26),
     textAlign: 'center',
     color: colors.navy,
   },
   message: {
     marginTop: spacing.md,
-    fontSize: 15,
-    lineHeight: 23,
+    fontSize: moderateScale(15),
+    lineHeight: verticalScale(23),
     textAlign: 'center',
     color: colors.muted,
-    maxWidth: 340,
+    maxWidth: scale(340),
   },
   primaryBtn: {
     marginTop: spacing.xxl,
@@ -135,7 +139,7 @@ const styles = StyleSheet.create({
   },
   secondaryBtn: {
     marginTop: spacing.lg,
-    fontSize: 15,
+    fontSize: moderateScale(15),
     fontWeight: '700',
     color: colors.green,
   },

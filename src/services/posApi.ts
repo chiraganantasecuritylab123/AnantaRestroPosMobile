@@ -14,7 +14,7 @@ export interface Category {
 }
 
 export interface PaymentType {
-  id: number;
+  id: number | string;
   title: string;
   is_active: boolean;
   icon: string;

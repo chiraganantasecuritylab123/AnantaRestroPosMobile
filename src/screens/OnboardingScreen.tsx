@@ -1,28 +1,33 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
-  Dimensions,
   FlatList,
   Image,
   NativeScrollEvent,
   NativeSyntheticEvent,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { GradientButton, Icon, ScreenBackground } from '../components/ui';
 import type { IconName } from '../components/ui';
-import { cardShadow, colors, spacing } from '../theme';
+import { colors, spacing } from '../theme';
 import type { AuthStackParamList } from '../navigation/types';
 import { setOnboardingComplete } from '../storage/appStorage';
+import {
+  maxContentWidth,
+  moderateScale,
+  scale,
+  verticalScale,
+} from '../utils/responsive';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Onboarding'>;
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-const SLIDE_PAD = 24;
+const SLIDE_PAD = scale(24);
+const COMPACT_HEIGHT = verticalScale(680);
 
 type CardFeature = {
   iconName: IconName;
@@ -101,11 +106,29 @@ const SLIDES: Slide[] = [
 ];
 
 export const OnboardingScreen: React.FC<Props> = ({ navigation }) => {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const compact = screenHeight < COMPACT_HEIGHT;
   const [index, setIndex] = useState(0);
   const listRef = useRef<FlatList>(null);
 
+  const slideMetrics = useMemo(
+    () => ({
+      headlineSize: moderateScale(compact ? 24 : 28),
+      headlineLine: moderateScale(compact ? 30 : 38),
+      bodySize: moderateScale(compact ? 13 : 15),
+      bodyLine: moderateScale(compact ? 18 : 22),
+      heroMaxHeight: Math.min(
+        screenHeight * (compact ? 0.28 : 0.34),
+        verticalScale(compact ? 220 : 300),
+      ),
+      featureIcon: moderateScale(compact ? 34 : 40),
+      featureTitle: moderateScale(compact ? 10 : 11),
+    }),
+    [compact, screenHeight],
+  );
+
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const i = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
+    const i = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
     setIndex(i);
   };
 
@@ -124,66 +147,107 @@ export const OnboardingScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   const renderCenteredSlide = (item: Slide) => (
-    <ScrollView
-      style={[styles.slideScroll, { width: SCREEN_W }]}
-      contentContainerStyle={styles.slideOneScrollContent}
-      showsVerticalScrollIndicator={false}
-      bounces={false}>
-      <View style={styles.slideOneHeader}>
-        {item.titleLines.map((line, i) => (
-          <Text
-            key={line}
+    <View style={[styles.slide, { width: screenWidth }]}>
+      <View style={styles.slideInner}>
+        <View style={[styles.slideOneHeader, compact && styles.slideOneHeaderCompact]}>
+          {item.titleLines.map((line, i) => (
+            <Text
+              key={line}
+              style={[
+                styles.slideOneHeadline,
+                {
+                  fontSize: slideMetrics.headlineSize,
+                  lineHeight: slideMetrics.headlineLine,
+                },
+                i === 1
+                  ? styles.slideOneHeadlineGreen
+                  : i === 2
+                    ? styles.slideOneHeadlineOrange
+                    : styles.slideOneHeadlineNavy,
+              ]}>
+              {line}
+            </Text>
+          ))}
+          {item.id === '1' || item.id === '3' ? (
+            <Text
+              style={[
+                styles.slideOneBody,
+                compact && styles.slideOneBodyCompact,
+                {
+                  fontSize: slideMetrics.bodySize,
+                  lineHeight: slideMetrics.bodyLine,
+                },
+              ]}>
+              {item.id === '1'
+                ? 'Manage your business, streamline operations and grow faster with '
+                : 'Access your business, manage your team and stay in control - anytime, anywhere with '}
+              <Text style={styles.slideOneBodyBold}>SwadeshPOS</Text>.
+            </Text>
+          ) : (
+            <Text
+              style={[
+                styles.slideOneBody,
+                compact && styles.slideOneBodyCompact,
+                {
+                  fontSize: slideMetrics.bodySize,
+                  lineHeight: slideMetrics.bodyLine,
+                },
+              ]}>
+              {item.body}
+            </Text>
+          )}
+          <View style={[styles.slideOneAccent, compact && styles.slideOneAccentCompact]} />
+        </View>
+
+        <View style={styles.slideOneHero}>
+          <Image
+            source={item.image}
             style={[
-              styles.slideOneHeadline,
-              i === 1
-                ? styles.slideOneHeadlineGreen
-                : i === 2
-                  ? styles.slideOneHeadlineOrange
-                  : styles.slideOneHeadlineNavy,
-            ]}>
-            {line}
-          </Text>
-        ))}
-        {item.id === '1' || item.id === '3' ? (
-          <Text style={styles.slideOneBody}>
-            {item.id === '1'
-              ? 'Manage your business, streamline operations and grow faster with '
-              : 'Access your business, manage your team and stay in control - anytime, anywhere with '}
-            <Text style={styles.slideOneBodyBold}>SwadeshPOS</Text>.
-          </Text>
-        ) : (
-          <Text style={styles.slideOneBody}>{item.body}</Text>
-        )}
-        <View style={styles.slideOneAccent} />
-      </View>
+              styles.slideOneImage,
+              { maxHeight: slideMetrics.heroMaxHeight },
+            ]}
+            resizeMode="contain"
+          />
+        </View>
 
-      <View style={styles.slideOneHero}>
-        <Image
-          source={item.image}
-          style={[
-            styles.slideOneImage,
-            { height: Math.min(SCREEN_H * 0.38, 340) },
-          ]}
-          resizeMode="contain"
-        />
-      </View>
-
-      <View style={styles.slideOneFeatureCard}>
-        {item.cardFeatures.map((f, i) => (
-          <React.Fragment key={f.title}>
-            <View style={styles.slideOneFeatureCol}>
-              <View style={styles.slideOneFeatureIcon}>
-                <Icon name={f.iconName} size={20} color={colors.green} />
+        <View style={[styles.slideOneFeatureCard, compact && styles.slideOneFeatureCardCompact]}>
+          {item.cardFeatures.map((f, i) => (
+            <React.Fragment key={f.title}>
+              <View style={styles.slideOneFeatureCol}>
+                <View
+                  style={[
+                    styles.slideOneFeatureIcon,
+                    {
+                      width: slideMetrics.featureIcon,
+                      height: slideMetrics.featureIcon,
+                      borderRadius: slideMetrics.featureIcon / 2,
+                    },
+                    compact && styles.slideOneFeatureIconCompact,
+                  ]}>
+                  <Icon
+                    name={f.iconName}
+                    size={moderateScale(compact ? 16 : 20)}
+                    color={colors.green}
+                  />
+                </View>
+                <Text
+                  style={[
+                    styles.slideOneFeatureTitle,
+                    compact && styles.slideOneFeatureTitleCompact,
+                    { fontSize: slideMetrics.featureTitle },
+                  ]}
+                  numberOfLines={2}>
+                  {f.title}
+                </Text>
               </View>
-              <Text style={styles.slideOneFeatureTitle}>{f.title}</Text>
-            </View>
-            {i < item.cardFeatures.length - 1 ? (
-              <View style={styles.slideOneFeatureDivider} />
-            ) : null}
-          </React.Fragment>
-        ))}
+              {i < item.cardFeatures.length - 1 ? (
+                <View style={styles.slideOneFeatureDivider} />
+              ) : null}
+            </React.Fragment>
+          ))}
+        </View>
       </View>
-    </ScrollView>
+    </View>
   );
 
   const renderSlide = ({ item }: { item: Slide }) => renderCenteredSlide(item);
@@ -195,7 +259,12 @@ export const OnboardingScreen: React.FC<Props> = ({ navigation }) => {
           <View />
           <TouchableOpacity
             onPress={finish}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+            hitSlop={{
+              top: scale(12),
+              bottom: scale(12),
+              left: scale(12),
+              right: scale(12),
+            }}>
             <Text style={styles.skip}>Skip</Text>
           </TouchableOpacity>
         </View>
@@ -211,8 +280,8 @@ export const OnboardingScreen: React.FC<Props> = ({ navigation }) => {
           showsHorizontalScrollIndicator={false}
           onMomentumScrollEnd={onScroll}
           getItemLayout={(_, i) => ({
-            length: SCREEN_W,
-            offset: SCREEN_W * i,
+            length: screenWidth,
+            offset: screenWidth * i,
             index: i,
           })}
         />
@@ -242,29 +311,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.sm,
+    maxWidth: maxContentWidth(),
+    alignSelf: 'center',
+    width: '100%',
   },
   skip: {
-    fontSize: 16,
+    fontSize: moderateScale(16),
     fontWeight: '600',
     color: '#3E4B74',
   },
-  slideScroll: {
+  slide: {
     flex: 1,
   },
-  slideOneScrollContent: {
-    flexGrow: 1,
+  slideInner: {
+    flex: 1,
     paddingHorizontal: SLIDE_PAD,
-    paddingBottom: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+    maxWidth: maxContentWidth(),
+    alignSelf: 'center',
+    width: '100%',
+    justifyContent: 'space-between',
   },
   slideOneHeader: {
     width: '100%',
+    flexShrink: 0,
+  },
+  slideOneHeaderCompact: {
+    marginBottom: verticalScale(2),
   },
   slideOneHeadline: {
-    fontSize: 28,
     fontWeight: '800',
-    lineHeight: 38,
     letterSpacing: -0.3,
     textAlign: 'left',
     width: '100%',
@@ -279,102 +354,118 @@ const styles = StyleSheet.create({
     color: colors.orange,
   },
   slideOneBody: {
-    marginTop: 12,
-    fontSize: 15,
-    lineHeight: 22,
+    marginTop: verticalScale(10),
     color: '#5F6981',
     fontWeight: '400',
     textAlign: 'left',
     width: '100%',
-    maxWidth: SCREEN_W - SLIDE_PAD * 2,
+  },
+  slideOneBodyCompact: {
+    marginTop: verticalScale(6),
   },
   slideOneBodyBold: {
     fontWeight: '700',
     color: colors.navy,
   },
   slideOneAccent: {
-    marginTop: 14,
-    width: 56,
-    height: 3,
-    borderRadius: 2,
+    marginTop: verticalScale(10),
+    width: scale(56),
+    height: verticalScale(3),
+    borderRadius: moderateScale(2),
     backgroundColor: colors.orange,
     alignSelf: 'flex-start',
   },
+  slideOneAccentCompact: {
+    marginTop: verticalScale(6),
+  },
   slideOneHero: {
-    marginTop: 16,
+    flex: 1,
     width: '100%',
+    minHeight: 0,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: verticalScale(4),
   },
   slideOneImage: {
-    width: SCREEN_W - SLIDE_PAD * 2,
+    width: '100%',
+    height: '100%',
+    maxWidth: maxContentWidth(),
     alignSelf: 'center',
   },
   slideOneFeatureCard: {
-    marginTop: 20,
     width: '100%',
-    paddingVertical: 16,
-    paddingHorizontal: 8,
+    paddingVertical: verticalScale(10),
+    paddingHorizontal: scale(4),
     flexDirection: 'row',
-    alignItems: 'stretch'
+    alignItems: 'stretch',
+    flexShrink: 0,
+  },
+  slideOneFeatureCardCompact: {
+    paddingVertical: verticalScale(6),
   },
   slideOneFeatureCol: {
     flex: 1,
     alignItems: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: scale(2),
   },
   slideOneFeatureDivider: {
     width: StyleSheet.hairlineWidth,
     backgroundColor: '#E8ECF2',
-    marginVertical: 2,
+    marginVertical: verticalScale(2),
   },
   slideOneFeatureIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
     backgroundColor: '#F3F5F9',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
+    marginBottom: verticalScale(6),
+  },
+  slideOneFeatureIconCompact: {
+    marginBottom: verticalScale(4),
   },
   slideOneFeatureIconText: {
-    fontSize: 18,
+    fontSize: moderateScale(18),
   },
   slideOneFeatureTitle: {
-    fontSize: 11,
     fontWeight: '700',
     color: colors.navy,
     textAlign: 'center',
-    lineHeight: 14,
-    minHeight: 28,
+    lineHeight: moderateScale(13),
+  },
+  slideOneFeatureTitleCompact: {
+    lineHeight: moderateScale(12),
   },
   slideOneFeatureDesc: {
-    marginTop: 4,
-    fontSize: 10,
-    lineHeight: 13,
+    marginTop: verticalScale(4),
+    fontSize: moderateScale(10),
+    lineHeight: moderateScale(13),
     color: '#6B758C',
     textAlign: 'center',
   },
   footer: {
     paddingHorizontal: spacing.xl,
-    paddingBottom: 16,
-    gap: spacing.lg,
+    paddingTop: verticalScale(4),
+    paddingBottom: verticalScale(12),
+    gap: spacing.md,
+    maxWidth: maxContentWidth(),
+    alignSelf: 'center',
+    width: '100%',
+    flexShrink: 0,
   },
   dots: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 8,
+    gap: scale(8),
   },
   dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: scale(8),
+    height: scale(8),
+    borderRadius: moderateScale(4),
     backgroundColor: '#D4D9E3',
   },
   dotActive: {
     backgroundColor: colors.orange,
-    width: 22,
-    height: 8,
-    borderRadius: 4,
+    width: scale(22),
+    height: scale(8),
+    borderRadius: moderateScale(4),
   },
 });

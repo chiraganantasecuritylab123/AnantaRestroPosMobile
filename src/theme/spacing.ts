@@ -1,18 +1,22 @@
+import {moderateScale, GLOBAL_RESPONSIVE} from '../utils/responsive';
+
+const d = GLOBAL_RESPONSIVE.moderateDamping;
+
 export const spacing = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
-  xxl: 24,
-  xxxl: 32,
+  xs: moderateScale(4, d),
+  sm: moderateScale(8, d),
+  md: moderateScale(12, d),
+  lg: moderateScale(16, d),
+  xl: moderateScale(20, d),
+  xxl: moderateScale(24, d),
+  xxxl: moderateScale(32, d),
 };
 
 export const radii = {
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
-  xxl: 24,
+  sm: moderateScale(8, d),
+  md: moderateScale(12, d),
+  lg: moderateScale(16, d),
+  xl: moderateScale(20, d),
+  xxl: moderateScale(24, d),
   pill: 999,
 };

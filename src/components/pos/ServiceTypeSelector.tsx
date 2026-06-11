@@ -11,8 +11,11 @@ import Svg, {Circle, Line, Path, Rect} from 'react-native-svg';
 import type {DeliveryType} from '../../features/cartSlice';
 import {CheckIcon} from '../ui';
 import {colors, radii, spacing} from '../../theme';
+import {moderateScale, scale, verticalScale} from '../../utils/responsive';
 
-const STROKE = 2;
+const STROKE = moderateScale(2);
+const DEFAULT_ICON_SIZE = moderateScale(28);
+const MENU_ICON_SIZE = moderateScale(22);
 
 type IconProps = {color: string; size: number};
 
@@ -80,7 +83,7 @@ type Props = {
   value: DeliveryType;
   onChange: (value: DeliveryType) => void;
   iconColor?: string;
-  /** Header trigger icon size (default 28). */
+  /** Header trigger icon size (default scaled 28). */
   iconSize?: number;
 };
 
@@ -88,12 +91,12 @@ export const ServiceTypeSelector: React.FC<Props> = ({
   value,
   onChange,
   iconColor = colors.navy,
-  iconSize = 28,
+  iconSize = DEFAULT_ICON_SIZE,
 }) => {
   const [open, setOpen] = useState(false);
   const current = OPTIONS.find(o => o.key === value) ?? OPTIONS[1];
   const CurrentIcon = current.Icon;
-  const hitSize = Math.max(44, iconSize + 16);
+  const hitSize = Math.max(scale(44), iconSize + scale(16));
 
   return (
     <>
@@ -127,7 +130,7 @@ export const ServiceTypeSelector: React.FC<Props> = ({
                   activeOpacity={0.85}>
                   <OptIcon
                     color={active ? colors.green : colors.navy}
-                    size={22}
+                    size={MENU_ICON_SIZE}
                   />
                   <Text
                     style={[
@@ -137,7 +140,11 @@ export const ServiceTypeSelector: React.FC<Props> = ({
                     {opt.label}
                   </Text>
                   {active ? (
-                    <CheckIcon size={14} color={colors.white} strokeWidth={3} />
+                    <CheckIcon
+                      size={moderateScale(14)}
+                      color={colors.white}
+                      strokeWidth={3}
+                    />
                   ) : null}
                 </TouchableOpacity>
               );
@@ -159,19 +166,19 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.35)',
     justifyContent: 'flex-start',
     alignItems: 'flex-end',
-    paddingTop: 50,
+    paddingTop: verticalScale(50),
     paddingRight: spacing.xl,
   },
   menu: {
     backgroundColor: colors.white,
     borderRadius: radii.lg,
     paddingVertical: spacing.sm,
-    minWidth: 180,
+    minWidth: scale(180),
     borderWidth: 1,
     borderColor: colors.border,
   },
   menuTitle: {
-    fontSize: 11,
+    fontSize: moderateScale(11),
     fontWeight: '700',
     color: colors.muted,
     textTransform: 'uppercase',
@@ -183,16 +190,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.md,
-    paddingVertical: 12,
+    paddingVertical: verticalScale(12),
     gap: spacing.sm,
   },
   optionActive: {backgroundColor: `${colors.green}14`},
   optionLabel: {
     flex: 1,
-    fontSize: 15,
+    fontSize: moderateScale(15),
     fontWeight: '600',
     color: colors.navy,
   },
   optionLabelActive: {fontWeight: '800', color: colors.green},
-  check: {fontSize: 14, fontWeight: '800', color: colors.green},
 });

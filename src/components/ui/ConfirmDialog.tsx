@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import {colors, radii, spacing} from '../../theme';
+import {moderateScale, scale, verticalScale} from '../../utils/responsive';
 
 type Props = {
   visible: boolean;
@@ -64,6 +65,8 @@ export const ConfirmDialog: React.FC<Props> = ({
   </Modal>
 );
 
+const ICON_SIZE = moderateScale(56);
+
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
@@ -74,7 +77,7 @@ const styles = StyleSheet.create({
   },
   card: {
     width: '100%',
-    maxWidth: 340,
+    maxWidth: scale(340),
     backgroundColor: colors.white,
     borderRadius: radii.xl,
     padding: spacing.xl,
@@ -83,24 +86,24 @@ const styles = StyleSheet.create({
     borderColor: colors.borderLight,
   },
   iconWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: ICON_SIZE,
+    height: ICON_SIZE,
+    borderRadius: ICON_SIZE / 2,
     backgroundColor: colors.errorBg,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.md,
   },
   title: {
-    fontSize: 18,
+    fontSize: moderateScale(18),
     fontWeight: '800',
     color: colors.navy,
     textAlign: 'center',
   },
   message: {
     marginTop: spacing.sm,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: moderateScale(14),
+    lineHeight: verticalScale(20),
     color: colors.muted,
     textAlign: 'center',
   },
@@ -112,19 +115,19 @@ const styles = StyleSheet.create({
   },
   cancelBtn: {
     flex: 1,
-    paddingVertical: 14,
+    paddingVertical: verticalScale(14),
     borderRadius: radii.lg,
     backgroundColor: colors.background,
     alignItems: 'center',
   },
   cancelText: {
-    fontSize: 15,
+    fontSize: moderateScale(15),
     fontWeight: '700',
     color: colors.navy,
   },
   confirmBtn: {
     flex: 1,
-    paddingVertical: 14,
+    paddingVertical: verticalScale(14),
     borderRadius: radii.lg,
     backgroundColor: colors.green,
     alignItems: 'center',
@@ -133,7 +136,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.error,
   },
   confirmText: {
-    fontSize: 15,
+    fontSize: moderateScale(15),
     fontWeight: '700',
     color: colors.white,
   },

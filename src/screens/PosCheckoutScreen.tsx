@@ -48,6 +48,13 @@ import {
 } from '../components/ui';
 import {cardShadow, colors} from '../theme';
 import {
+  isTablet,
+  maxContentWidth,
+  moderateScale,
+  scale,
+  verticalScale,
+} from '../utils/responsive';
+import {
   formatPrintSkippedMessage,
   printOnOrderPlaced,
   wasReceiptPrinted,
@@ -330,7 +337,8 @@ export const PosCheckoutScreen: React.FC = () => {
 
   const onAddCustomer = async () => {
     await addCustomer({
-      phone: customerForm.phone,
+      phone: customerForm.phone.replace(/\D/g, ''),
+      phone_country_code: '91',
       name: customerForm.name,
       email: customerForm.email,
       birthDate: customerForm.birthDate,
@@ -347,16 +355,29 @@ export const PosCheckoutScreen: React.FC = () => {
 
   const isSubmitting = isCreatingOrder || isCreatingOrderInvoice;
   const searchActive = query.trim().length >= 1 && customers.length > 0;
+  const tablet = isTablet();
+  const contentMaxW = maxContentWidth();
 
   return (
     <ScreenBackground>
       <SafeAreaView style={styles.safe} edges={['top']}>
+        {/* Tablet: center checkout column for readable line length */}
+        <View
+          style={[
+            styles.contentShell,
+            tablet && {maxWidth: contentMaxW, alignSelf: 'center', width: '100%'},
+          ]}>
         <View style={styles.topBar}>
         <TouchableOpacity
           style={styles.backBtn}
           onPress={() => navigation.goBack()}
-          hitSlop={{top: 12, bottom: 12, left: 12, right: 12}}>
-          <ChevronLeftIcon size={22} color={WARM} />
+          hitSlop={{
+            top: scale(12),
+            bottom: scale(12),
+            left: scale(12),
+            right: scale(12),
+          }}>
+          <ChevronLeftIcon size={moderateScale(22)} color={WARM} />
         </TouchableOpacity>
         <View style={styles.topBarCenter}>
           <Text style={styles.topTitle}>Checkout</Text>
@@ -406,7 +427,7 @@ export const PosCheckoutScreen: React.FC = () => {
                           <Text style={styles.resultPhone}>{c.phone}</Text>
                         </View>
                         {selected ? (
-                          <CheckIcon size={18} color={ACCENT} strokeWidth={3} />
+                          <CheckIcon size={moderateScale(18)} color={ACCENT} strokeWidth={3} />
                         ) : (
                           <Text style={styles.resultTapHint}>Select</Text>
                         )}
@@ -440,7 +461,8 @@ export const PosCheckoutScreen: React.FC = () => {
 
             <Text style={styles.sectionLabel}>Service type</Text>
             <View style={[styles.card, cardShadow]}>
-              <View style={styles.deliveryRow}>
+              {/* Tablet: service pills in a row instead of stacked */}
+              <View style={[styles.deliveryRow, tablet && styles.deliveryRowTablet]}>
                 {DELIVERY_OPTIONS.map(opt => {
                   const active = cart.deliveryType === opt.key;
                   return (
@@ -546,7 +568,12 @@ export const PosCheckoutScreen: React.FC = () => {
                     removeItem({ id: item.id, lineKey: item.lineKey }),
                   )
                 }
-                hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}>
+                hitSlop={{
+                  top: scale(8),
+                  bottom: scale(8),
+                  left: scale(8),
+                  right: scale(8),
+                }}>
                 <Text style={styles.removeLink}>Remove</Text>
               </TouchableOpacity>
             </View>
@@ -566,7 +593,7 @@ export const PosCheckoutScreen: React.FC = () => {
                       }),
                     )
                   }>
-                  <MinusIcon size={20} color={WARM} strokeWidth={2.5} />
+                  <MinusIcon size={moderateScale(20)} color={WARM} strokeWidth={2.5} />
                 </TouchableOpacity>
                 <Text style={styles.stepVal}>{item.quantity}</Text>
                 <TouchableOpacity
@@ -579,7 +606,7 @@ export const PosCheckoutScreen: React.FC = () => {
                       }),
                     )
                   }>
-                  <PlusIcon size={20} color={WHITE} strokeWidth={2.5} />
+                  <PlusIcon size={moderateScale(20)} color={WHITE} strokeWidth={2.5} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -633,6 +660,7 @@ export const PosCheckoutScreen: React.FC = () => {
           </View>
         }
       />
+        </View>
 
       <Modal
         visible={showAddCustomer}
@@ -788,7 +816,7 @@ export const PosCheckoutScreen: React.FC = () => {
               onPress={() => {
                 setSuccessModal(null);
                 const parent: any = (navigation as any).getParent?.();
-                parent?.navigate?.('Orders');
+                parent?.navigate?.('Orders', {screen: 'OrdersMain'});
               }}>
               <Text style={styles.successSecondaryText}>View Orders</Text>
             </TouchableOpacity>
@@ -802,31 +830,36 @@ export const PosCheckoutScreen: React.FC = () => {
 
 const styles = StyleSheet.create({
   safe: {flex: 1, backgroundColor: BG},
+  contentShell: {flex: 1},
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(10),
   },
   backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    width: scale(44),
+    height: scale(44),
+    borderRadius: moderateScale(14),
     backgroundColor: WHITE,
     alignItems: 'center',
     justifyContent: 'center',
     ...cardShadow,
   },
-  backBtnText: {fontSize: 22, color: WARM, fontWeight: '700'},
-  backBtnPlaceholder: {width: 44},
+  backBtnText: {fontSize: moderateScale(22), color: WARM, fontWeight: '700'},
+  backBtnPlaceholder: {width: scale(44)},
   topBarCenter: {flex: 1, alignItems: 'center'},
-  topTitle: {fontSize: 18, fontWeight: '800', color: WARM},
-  topSub: {fontSize: 12, color: MUTED, marginTop: 2},
-  listContent: {paddingHorizontal: 16, paddingBottom: 32},
+  topTitle: {fontSize: moderateScale(18), fontWeight: '800', color: WARM},
+  topSub: {fontSize: moderateScale(12), color: MUTED, marginTop: verticalScale(2)},
+  listContent: {
+    paddingHorizontal: scale(16),
+    paddingBottom: verticalScale(32),
+    flexGrow: 1,
+  },
   sectionLabel: {
-    marginTop: 20,
-    marginBottom: 10,
-    fontSize: 13,
+    marginTop: verticalScale(20),
+    marginBottom: verticalScale(10),
+    fontSize: moderateScale(13),
     fontWeight: '700',
     color: MUTED,
     letterSpacing: 0.6,
@@ -834,28 +867,28 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: WHITE,
-    borderRadius: 20,
-    padding: 16,
+    borderRadius: moderateScale(20),
+    padding: moderateScale(16),
   },
   fieldLabel: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     fontWeight: '600',
     color: MUTED,
-    marginBottom: 8,
+    marginBottom: verticalScale(8),
   },
   input: {
     borderWidth: 1.5,
     borderColor: '#E8DFD2',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
+    borderRadius: moderateScale(14),
+    paddingHorizontal: scale(14),
+    paddingVertical: verticalScale(12),
+    fontSize: moderateScale(16),
     color: WARM,
     backgroundColor: BG,
   },
   resultsBox: {
-    marginTop: 10,
-    borderRadius: 14,
+    marginTop: verticalScale(10),
+    borderRadius: moderateScale(14),
     borderWidth: 1,
     borderColor: '#E8DFD2',
     overflow: 'hidden',
@@ -863,115 +896,122 @@ const styles = StyleSheet.create({
   resultRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    paddingVertical: verticalScale(12),
+    paddingHorizontal: scale(14),
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#E8DFD2',
     backgroundColor: WHITE,
   },
   resultRowSelected: {backgroundColor: 'rgba(255,159,90,0.12)'},
-  resultTextCol: {flex: 1},
-  resultName: {fontSize: 16, fontWeight: '700', color: WARM},
-  resultPhone: {fontSize: 13, color: MUTED, marginTop: 2},
-  resultTapHint: {fontSize: 13, fontWeight: '600', color: ACCENT},
-  resultCheck: {fontSize: 18, fontWeight: '800', color: ACCENT},
+  resultTextCol: {flex: 1, flexShrink: 1},
+  resultName: {fontSize: moderateScale(16), fontWeight: '700', color: WARM},
+  resultPhone: {fontSize: moderateScale(13), color: MUTED, marginTop: verticalScale(2)},
+  resultTapHint: {fontSize: moderateScale(13), fontWeight: '600', color: ACCENT},
+  resultCheck: {fontSize: moderateScale(18), fontWeight: '800', color: ACCENT},
   selectedBanner: {
-    marginTop: 12,
+    marginTop: verticalScale(12),
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: CHARCOAL,
-    borderRadius: 14,
-    padding: 12,
+    borderRadius: moderateScale(14),
+    padding: moderateScale(12),
   },
   selectedDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: scale(8),
+    height: scale(8),
+    borderRadius: moderateScale(4),
     backgroundColor: ACCENT,
-    marginRight: 10,
+    marginRight: scale(10),
   },
-  selectedLabel: {fontSize: 11, color: 'rgba(255,255,255,0.6)', fontWeight: '600'},
-  selectedName: {fontSize: 15, color: WHITE, fontWeight: '700', marginTop: 2},
-  clearSel: {fontSize: 14, fontWeight: '700', color: ACCENT},
+  selectedLabel: {fontSize: moderateScale(11), color: 'rgba(255,255,255,0.6)', fontWeight: '600'},
+  selectedName: {fontSize: moderateScale(15), color: WHITE, fontWeight: '700', marginTop: verticalScale(2), flexShrink: 1},
+  clearSel: {fontSize: moderateScale(14), fontWeight: '700', color: ACCENT},
   addCustomerBtn: {
-    marginTop: 14,
+    marginTop: verticalScale(14),
     borderWidth: 1.5,
     borderColor: ACCENT,
-    borderRadius: 14,
-    paddingVertical: 12,
+    borderRadius: moderateScale(14),
+    paddingVertical: verticalScale(12),
     alignItems: 'center',
   },
-  addCustomerBtnText: {color: ACCENT, fontWeight: '800', fontSize: 15},
-  deliveryRow: {gap: 10},
+  addCustomerBtnText: {color: ACCENT, fontWeight: '800', fontSize: moderateScale(15)},
+  deliveryRow: {gap: scale(10)},
+  deliveryRowTablet: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
   deliveryPill: {
-    borderRadius: 16,
+    borderRadius: moderateScale(16),
     borderWidth: 1.5,
     borderColor: '#E8DFD2',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    paddingVertical: verticalScale(12),
+    paddingHorizontal: scale(14),
     backgroundColor: BG,
+    flex: 1,
+    flexShrink: 1,
+    minWidth: scale(100),
   },
   deliveryPillActive: {
     borderColor: ACCENT,
     backgroundColor: 'rgba(22,163,74,0.12)',
   },
-  deliveryPillTitle: {fontSize: 16, fontWeight: '800', color: WARM},
+  deliveryPillTitle: {fontSize: moderateScale(16), fontWeight: '800', color: WARM},
   deliveryPillTitleActive: {color: CHARCOAL},
-  deliveryPillHint: {fontSize: 12, color: MUTED, marginTop: 4},
+  deliveryPillHint: {fontSize: moderateScale(12), color: MUTED, marginTop: verticalScale(4)},
   deliveryPillHintActive: {color: MUTED},
-  warnText: {marginTop: 10, fontSize: 13, color: '#b00020', fontWeight: '600'},
-  billRow: {flexDirection: 'row', gap: 10},
+  warnText: {marginTop: verticalScale(10), fontSize: moderateScale(13), color: '#b00020', fontWeight: '600'},
+  billRow: {flexDirection: 'row', gap: scale(10)},
   billPill: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 14,
+    paddingVertical: verticalScale(12),
+    borderRadius: moderateScale(14),
     alignItems: 'center',
     backgroundColor: BG,
     borderWidth: 1.5,
     borderColor: '#E8DFD2',
   },
   billPillOn: {backgroundColor: ACCENT, borderColor: ACCENT},
-  billPillText: {fontSize: 14, fontWeight: '700', color: MUTED},
+  billPillText: {fontSize: moderateScale(14), fontWeight: '700', color: MUTED},
   billPillTextOn: {color: WHITE},
-  payScroll: {gap: 10, paddingVertical: 4},
+  payScroll: {gap: scale(10), paddingVertical: verticalScale(4)},
   payChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
+    paddingHorizontal: scale(16),
+    paddingVertical: verticalScale(10),
+    borderRadius: moderateScale(20),
     backgroundColor: WHITE,
     borderWidth: 1.5,
     borderColor: '#E8DFD2',
   },
   payChipOn: {borderColor: ACCENT, backgroundColor: 'rgba(255,159,90,0.12)'},
-  payChipText: {fontWeight: '700', color: WARM},
+  payChipText: {fontWeight: '700', color: WARM, fontSize: moderateScale(14)},
   payChipTextOn: {color: CHARCOAL},
   cartLine: {
     backgroundColor: WHITE,
-    borderRadius: 18,
-    padding: 14,
-    marginBottom: 12,
+    borderRadius: moderateScale(18),
+    padding: moderateScale(14),
+    marginBottom: verticalScale(12),
   },
   cartLineTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    gap: 8,
+    gap: scale(8),
   },
-  lineTitle: {flex: 1, fontSize: 16, fontWeight: '800', color: WARM},
-  removeLink: {fontSize: 14, fontWeight: '700', color: '#c62828'},
-  linePrice: {marginTop: 6, fontSize: 13, color: MUTED},
+  lineTitle: {flex: 1, flexShrink: 1, fontSize: moderateScale(16), fontWeight: '800', color: WARM},
+  removeLink: {fontSize: moderateScale(14), fontWeight: '700', color: '#c62828'},
+  linePrice: {marginTop: verticalScale(6), fontSize: moderateScale(13), color: MUTED},
   qtyRow: {
-    marginTop: 12,
+    marginTop: verticalScale(12),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  qtyLabel: {fontSize: 14, fontWeight: '700', color: MUTED},
-  stepper: {flexDirection: 'row', alignItems: 'center', gap: 12},
+  qtyLabel: {fontSize: moderateScale(14), fontWeight: '700', color: MUTED},
+  stepper: {flexDirection: 'row', alignItems: 'center', gap: scale(12)},
   stepBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: scale(36),
+    height: scale(36),
+    borderRadius: moderateScale(18),
     backgroundColor: BG,
     alignItems: 'center',
     justifyContent: 'center',
@@ -979,152 +1019,169 @@ const styles = StyleSheet.create({
     borderColor: '#E8DFD2',
   },
   stepBtnPlus: {backgroundColor: ACCENT, borderColor: ACCENT},
-  stepBtnText: {fontSize: 20, fontWeight: '700', color: WARM},
-  stepBtnTextLight: {fontSize: 20, fontWeight: '700', color: WHITE},
-  stepVal: {fontSize: 17, fontWeight: '800', color: WARM, minWidth: 24, textAlign: 'center'},
-  noteLabel: {marginTop: 12, fontSize: 13, fontWeight: '600', color: MUTED},
+  stepBtnText: {fontSize: moderateScale(20), fontWeight: '700', color: WARM},
+  stepBtnTextLight: {fontSize: moderateScale(20), fontWeight: '700', color: WHITE},
+  stepVal: {
+    fontSize: moderateScale(17),
+    fontWeight: '800',
+    color: WARM,
+    minWidth: scale(24),
+    textAlign: 'center',
+  },
+  noteLabel: {marginTop: verticalScale(12), fontSize: moderateScale(13), fontWeight: '600', color: MUTED},
   noteInput: {
-    marginTop: 6,
-    minHeight: 64,
-    borderRadius: 12,
+    marginTop: verticalScale(6),
+    minHeight: verticalScale(64),
+    borderRadius: moderateScale(12),
     borderWidth: 1.5,
     borderColor: '#E8DFD2',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(10),
+    fontSize: moderateScale(14),
     color: WARM,
     textAlignVertical: 'top',
     backgroundColor: BG,
   },
   summary: {
-    marginTop: 8,
+    marginTop: verticalScale(8),
     backgroundColor: CHARCOAL,
-    borderRadius: 22,
-    padding: 20,
+    borderRadius: moderateScale(22),
+    padding: moderateScale(20),
   },
   summaryTitle: {
     color: 'rgba(255,255,255,0.55)',
-    fontSize: 12,
+    fontSize: moderateScale(12),
     fontWeight: '700',
     letterSpacing: 1,
     textTransform: 'uppercase',
-    marginBottom: 12,
+    marginBottom: verticalScale(12),
   },
   sumLine: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: verticalScale(8),
   },
-  sumMuted: {color: 'rgba(255,255,255,0.65)', fontSize: 15},
-  sumVal: {color: WHITE, fontSize: 15, fontWeight: '600'},
-  sumTotalRow: {marginTop: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.15)'},
-  sumTotalLabel: {color: WHITE, fontSize: 18, fontWeight: '800'},
-  sumTotalVal: {color: ACCENT, fontSize: 20, fontWeight: '800'},
+  sumMuted: {color: 'rgba(255,255,255,0.65)', fontSize: moderateScale(15)},
+  sumVal: {color: WHITE, fontSize: moderateScale(15), fontWeight: '600'},
+  sumTotalRow: {
+    marginTop: verticalScale(8),
+    paddingTop: verticalScale(12),
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.15)',
+  },
+  sumTotalLabel: {color: WHITE, fontSize: moderateScale(18), fontWeight: '800'},
+  sumTotalVal: {color: ACCENT, fontSize: moderateScale(20), fontWeight: '800'},
   confirmBtn: {
-    marginTop: 18,
+    marginTop: verticalScale(18),
     backgroundColor: ACCENT,
-    borderRadius: 16,
-    paddingVertical: 16,
+    borderRadius: moderateScale(16),
+    paddingVertical: verticalScale(16),
     alignItems: 'center',
   },
-  confirmBtnText: {color: WHITE, fontSize: 17, fontWeight: '800'},
+  confirmBtnText: {color: WHITE, fontSize: moderateScale(17), fontWeight: '800'},
   modalRoot: {flex: 1, justifyContent: 'flex-end'},
   modalBackdropFlex: {flex: 1, backgroundColor: 'rgba(0,0,0,0.45)'},
   addSheet: {
     backgroundColor: BG,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 24,
+    borderTopLeftRadius: moderateScale(24),
+    borderTopRightRadius: moderateScale(24),
+    paddingHorizontal: scale(20),
+    paddingTop: verticalScale(10),
+    paddingBottom: verticalScale(24),
     maxHeight: '88%',
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: scale(560),
   },
   sheetHandle: {
     alignSelf: 'center',
-    width: 40,
-    height: 4,
-    borderRadius: 2,
+    width: scale(40),
+    height: verticalScale(4),
+    borderRadius: moderateScale(2),
     backgroundColor: '#D4C9BC',
-    marginBottom: 16,
+    marginBottom: verticalScale(16),
   },
-  sheetTitle: {fontSize: 22, fontWeight: '800', color: WARM},
-  sheetSub: {marginTop: 6, fontSize: 14, color: MUTED, lineHeight: 20},
-  sheetForm: {paddingBottom: 16},
+  sheetTitle: {fontSize: moderateScale(22), fontWeight: '800', color: WARM},
+  sheetSub: {marginTop: verticalScale(6), fontSize: moderateScale(14), color: MUTED, lineHeight: verticalScale(20)},
+  sheetForm: {paddingBottom: verticalScale(16)},
   sheetInput: {
     borderWidth: 1.5,
     borderColor: '#E8DFD2',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
+    borderRadius: moderateScale(14),
+    paddingHorizontal: scale(14),
+    paddingVertical: verticalScale(12),
+    fontSize: moderateScale(16),
     color: WARM,
     backgroundColor: WHITE,
-    marginBottom: 14,
+    marginBottom: verticalScale(14),
   },
-  genderRow: {flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 8},
+  genderRow: {flexDirection: 'row', gap: scale(8), flexWrap: 'wrap', marginBottom: verticalScale(8)},
   genderChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
+    paddingHorizontal: scale(16),
+    paddingVertical: verticalScale(10),
+    borderRadius: moderateScale(20),
     backgroundColor: WHITE,
     borderWidth: 1.5,
     borderColor: '#E8DFD2',
   },
   genderChipOn: {borderColor: ACCENT, backgroundColor: 'rgba(255,159,90,0.15)'},
-  genderChipText: {fontWeight: '600', color: MUTED},
+  genderChipText: {fontWeight: '600', color: MUTED, fontSize: moderateScale(14)},
   genderChipTextOn: {color: WARM, fontWeight: '800'},
   sheetPrimary: {
     backgroundColor: ACCENT,
-    borderRadius: 16,
-    paddingVertical: 16,
+    borderRadius: moderateScale(16),
+    paddingVertical: verticalScale(16),
     alignItems: 'center',
   },
-  sheetPrimaryText: {color: WHITE, fontSize: 17, fontWeight: '800'},
-  sheetCancel: {marginTop: 12, paddingVertical: 10, alignItems: 'center'},
-  sheetCancelText: {color: MUTED, fontWeight: '600', fontSize: 15},
+  sheetPrimaryText: {color: WHITE, fontSize: moderateScale(17), fontWeight: '800'},
+  sheetCancel: {marginTop: verticalScale(12), paddingVertical: verticalScale(10), alignItems: 'center'},
+  sheetCancelText: {color: MUTED, fontWeight: '600', fontSize: moderateScale(15)},
   toast: {
     position: 'absolute',
-    top: 56,
-    left: 16,
-    right: 16,
+    top: verticalScale(56),
+    left: scale(16),
+    right: scale(16),
     backgroundColor: CHARCOAL,
-    padding: 12,
-    borderRadius: 14,
+    padding: moderateScale(12),
+    borderRadius: moderateScale(14),
     zIndex: 999,
   },
-  toastText: {color: WHITE, fontWeight: '800', fontSize: 13, lineHeight: 18},
+  toastText: {color: WHITE, fontWeight: '800', fontSize: moderateScale(13), lineHeight: verticalScale(18)},
   successOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'center',
-    padding: 16,
+    padding: moderateScale(16),
   },
   successCard: {
     backgroundColor: '#fff8f1',
-    borderRadius: 26,
-    padding: 22,
+    borderRadius: moderateScale(26),
+    padding: moderateScale(22),
+    width: '100%',
+    maxWidth: scale(400),
+    alignSelf: 'center',
   },
-  successKicker: {color: MUTED, fontWeight: '800', fontSize: 12, letterSpacing: 0.7},
-  successToken: {marginTop: 10, fontSize: 36, fontWeight: '900', color: WARM},
-  successMeta: {marginTop: 6, fontSize: 14, fontWeight: '700', color: MUTED},
-  successTotal: {marginTop: 14, fontSize: 22, fontWeight: '900', color: WARM},
-  successCustomer: {marginTop: 8, fontSize: 14, fontWeight: '700', color: MUTED},
+  successKicker: {color: MUTED, fontWeight: '800', fontSize: moderateScale(12), letterSpacing: 0.7},
+  successToken: {marginTop: verticalScale(10), fontSize: moderateScale(36), fontWeight: '900', color: WARM},
+  successMeta: {marginTop: verticalScale(6), fontSize: moderateScale(14), fontWeight: '700', color: MUTED},
+  successTotal: {marginTop: verticalScale(14), fontSize: moderateScale(22), fontWeight: '900', color: WARM},
+  successCustomer: {marginTop: verticalScale(8), fontSize: moderateScale(14), fontWeight: '700', color: MUTED},
   successPrimary: {
-    marginTop: 18,
+    marginTop: verticalScale(18),
     backgroundColor: ACCENT,
-    borderRadius: 18,
-    paddingVertical: 14,
+    borderRadius: moderateScale(18),
+    paddingVertical: verticalScale(14),
     alignItems: 'center',
   },
-  successPrimaryText: {color: WHITE, fontWeight: '900', fontSize: 16},
+  successPrimaryText: {color: WHITE, fontWeight: '900', fontSize: moderateScale(16)},
   successSecondary: {
-    marginTop: 12,
+    marginTop: verticalScale(12),
     backgroundColor: 'transparent',
-    borderRadius: 18,
-    paddingVertical: 14,
+    borderRadius: moderateScale(18),
+    paddingVertical: verticalScale(14),
     alignItems: 'center',
     borderWidth: 1.5,
     borderColor: '#E8DFD2',
   },
-  successSecondaryText: {color: WARM, fontWeight: '900', fontSize: 16},
+  successSecondaryText: {color: WARM, fontWeight: '900', fontSize: moderateScale(16)},
 });

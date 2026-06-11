@@ -7,6 +7,7 @@ import type {MainTabParamList} from '../../navigation/types';
 import type {PrinterConnectionStatus} from '../../types/printer';
 import {Card, PrinterIcon} from '../ui';
 import {colors, radii, spacing} from '../../theme';
+import {moderateScale, scale, verticalScale} from '../../utils/responsive';
 
 type Nav = BottomTabNavigationProp<MainTabParamList, 'Dashboard'>;
 
@@ -55,7 +56,7 @@ export const PrinterStatusCard: React.FC = () => {
       <Card style={styles.card}>
         <View style={styles.row}>
           <View style={styles.iconWrap}>
-            <PrinterIcon size={22} color={colors.navy} />
+            <PrinterIcon size={moderateScale(22)} color={colors.navy} />
           </View>
           <View style={styles.body}>
             <Text style={styles.kicker}>Printer</Text>
@@ -103,52 +104,53 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   iconWrap: {
-    width: 36,
-    height: 36,
+    width: scale(36),
+    height: scale(36),
     borderRadius: radii.sm,
     backgroundColor: '#EDE9FE',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
-  icon: {fontSize: 18},
-  body: {flex: 1},
+  body: {flex: 1, minWidth: 0},
   kicker: {
-    fontSize: 10,
+    fontSize: moderateScale(10),
     fontWeight: '700',
     color: colors.muted,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   name: {
-    marginTop: 2,
-    fontSize: 14,
+    marginTop: verticalScale(2),
+    fontSize: moderateScale(14),
     fontWeight: '700',
     color: colors.navy,
   },
   right: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: scale(6),
+    flexShrink: 0,
   },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    gap: scale(4),
+    paddingHorizontal: scale(8),
+    paddingVertical: verticalScale(4),
     borderRadius: radii.pill,
   },
   dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: moderateScale(6),
+    height: moderateScale(6),
+    borderRadius: moderateScale(3),
   },
   pillText: {
-    fontSize: 10,
+    fontSize: moderateScale(10),
     fontWeight: '800',
   },
   chevron: {
-    fontSize: 20,
+    fontSize: moderateScale(20),
     color: colors.muted,
     fontWeight: '300',
   },

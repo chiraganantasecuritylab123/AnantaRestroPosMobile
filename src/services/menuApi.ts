@@ -81,6 +81,16 @@ export interface UpdateTaxResponse {
   taxId: string;
 }
 
+export interface DeleteTaxRequest {
+  id: string;
+}
+
+export interface DeleteTaxResponse {
+  success: boolean;
+  message: string;
+  taxId: string;
+}
+
 export interface ImageUploadResponse {
   success: boolean;
   url: string;
@@ -131,6 +141,12 @@ export interface UpdateMenuItemStockSettingsRequest {
 export interface UpdateMenuItemStockSettingsResponse {
   success: boolean;
   message: string;
+}
+
+export interface MenuItemPhotoResponse {
+  success: boolean;
+  message: string;
+  imageURL?: string;
 }
 
 export function buildImageFormData(
@@ -200,6 +216,16 @@ export function menuItemImageValue(uploadedPath: string | null | undefined): str
     return '';
   }
   return resolveMediaUrl(uploadedPath.trim());
+}
+
+export function menuItemImageChanged(
+  currentPath: string | null | undefined,
+  initialPath: string | null | undefined,
+): boolean {
+  return (
+    menuItemImageValue(currentPath).toLowerCase() !==
+    menuItemImageValue(initialPath).toLowerCase()
+  );
 }
 
 export const menuApi = createApi({
@@ -308,7 +334,16 @@ export const menuApi = createApi({
       query: ({id, title, rate, type}) => ({
         url: `/settings/taxes/${id}/update`,
         method: 'POST',
+        params: {lang: 'en'},
         body: {title, rate: String(rate), type},
+      }),
+      invalidatesTags: ['MenuTaxes'],
+    }),
+    deleteTax: builder.mutation<DeleteTaxResponse, DeleteTaxRequest>({
+      query: ({id}) => ({
+        url: `/settings/taxes/${id}`,
+        method: 'DELETE',
+        params: {lang: 'en'},
       }),
       invalidatesTags: ['MenuTaxes'],
     }),
@@ -367,6 +402,38 @@ export const menuApi = createApi({
         }
       },
     }),
+    uploadMenuItemPhoto: builder.mutation<
+      MenuItemPhotoResponse,
+      {id: string; image: string}
+    >({
+      query: ({id, image}) => ({
+        url: `/menu-items/update/${id}/upload-photo`,
+        method: 'POST',
+        body: {image},
+      }),
+      async onQueryStarted(_arg, {dispatch, queryFulfilled}) {
+        try {
+          await queryFulfilled;
+          dispatch(posApi.util.invalidateTags(['PosInit']));
+        } catch {
+          // ignore
+        }
+      },
+    }),
+    removeMenuItemPhoto: builder.mutation<MenuItemPhotoResponse, {id: string}>({
+      query: ({id}) => ({
+        url: `/menu-items/update/${id}/remove-photo`,
+        method: 'POST',
+      }),
+      async onQueryStarted(_arg, {dispatch, queryFulfilled}) {
+        try {
+          await queryFulfilled;
+          dispatch(posApi.util.invalidateTags(['PosInit']));
+        } catch {
+          // ignore
+        }
+      },
+    }),
     uploadImage: builder.mutation<
       ImageUploadResponse,
       {uri: string; fileName: string; mimeType: string}
@@ -399,8 +466,11 @@ export const {
   useDeleteCategoryMutation,
   useCreateTaxMutation,
   useUpdateTaxMutation,
+  useDeleteTaxMutation,
   useCreateMenuItemMutation,
   useUpdateMenuItemMutation,
   useUpdateMenuItemStockSettingsMutation,
+  useUploadMenuItemPhotoMutation,
+  useRemoveMenuItemPhotoMutation,
   useUploadImageMutation,
 } = menuApi;

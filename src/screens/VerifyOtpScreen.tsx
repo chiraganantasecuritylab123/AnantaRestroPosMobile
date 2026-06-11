@@ -29,6 +29,13 @@ import {
 import {colors, radii, spacing, typography} from '../theme';
 import type {AuthStackParamList} from '../navigation/types';
 import {extractSixDigitOtp} from '../utils/otpAutoFill';
+import {
+  maxContentWidth,
+  moderateScale,
+  scale,
+  useBrandLogoSize,
+  verticalScale,
+} from '../utils/responsive';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'VerifyOtp'>;
 
@@ -39,7 +46,14 @@ function formatCountdown(seconds: number) {
 }
 
 export const VerifyOtpScreen: React.FC<Props> = ({navigation, route}) => {
-  const {phoneMasked, preAuthToken, expiresInSec = 300, devHint} = route.params;
+  const {
+    phoneMasked,
+    preAuthToken,
+    flow,
+    expiresInSec = 300,
+    devHint,
+  } = route.params;
+  const isRegisterFlow = flow === 'register';
   const [otp, setOtp] = useState('');
   const [apiOtpHint, setApiOtpHint] = useState(devHint ?? '');
   const [error, setError] = useState<string | null>(null);
@@ -49,6 +63,7 @@ export const VerifyOtpScreen: React.FC<Props> = ({navigation, route}) => {
   const dispatch = useAppDispatch();
   const autoVerifyRef = useRef(false);
   const lastSubmittedOtpRef = useRef('');
+  const logoSize = useBrandLogoSize();
 
   useEffect(() => {
     if (secondsLeft <= 0) {
@@ -73,32 +88,50 @@ export const VerifyOtpScreen: React.FC<Props> = ({navigation, route}) => {
       setError(null);
       try {
         const res = await verifyOtp({otp: normalized, preAuthToken}).unwrap();
-        if (!res?.success || !res?.accessToken) {
+        if (!res?.success) {
           lastSubmittedOtpRef.current = '';
           setError(res?.message ?? 'Invalid OTP');
           return;
         }
-        dispatch(
-          setAuth({
-            token: res.accessToken,
-            user: res.user ?? null,
-          }),
-        );
-        const outletFromOtp = pickOutletId(
-          res.user?.tenant_id,
-          res.outlet_id != null ? String(res.outlet_id) : null,
-          res.outletId != null ? String(res.outletId) : null,
-          extractOutletIdFromUser(res.user),
-        );
-        if (outletFromOtp) {
-          dispatch(setOutletId(outletFromOtp));
+
+        const resolvedFlow = res.flow ?? flow;
+        const signupToken = res.preAuthToken ?? preAuthToken;
+
+        if (res.accessToken) {
+          dispatch(
+            setAuth({
+              token: res.accessToken,
+              user: res.user ?? null,
+            }),
+          );
+          const outletFromOtp = pickOutletId(
+            res.user?.tenant_id,
+            res.outlet_id != null ? String(res.outlet_id) : null,
+            res.outletId != null ? String(res.outletId) : null,
+            extractOutletIdFromUser(res.user),
+          );
+          if (outletFromOtp) {
+            dispatch(setOutletId(outletFromOtp));
+          }
+          return;
         }
+
+        if (resolvedFlow === 'register') {
+          navigation.replace('SignupComplete', {
+            preAuthToken: signupToken,
+            phoneMasked,
+          });
+          return;
+        }
+
+        lastSubmittedOtpRef.current = '';
+        setError(res?.message ?? 'Unable to complete sign in');
       } catch (e: any) {
         lastSubmittedOtpRef.current = '';
         setError(e?.data?.message ?? 'Invalid OTP');
       }
     },
-    [dispatch, preAuthToken, verifyOtp, verifying],
+    [dispatch, flow, navigation, phoneMasked, preAuthToken, verifyOtp, verifying],
   );
 
   useEffect(() => {
@@ -166,23 +199,29 @@ export const VerifyOtpScreen: React.FC<Props> = ({navigation, route}) => {
         <TouchableOpacity
           style={styles.backBtn}
           onPress={() => navigation.goBack()}
-          hitSlop={{top: 12, bottom: 12, left: 12, right: 12}}>
-          <ChevronLeftIcon size={22} color={colors.navy} />
+          hitSlop={{
+            top: scale(12),
+            bottom: scale(12),
+            left: scale(12),
+            right: scale(12),
+          }}>
+          <ChevronLeftIcon size={moderateScale(22)} color={colors.navy} />
         </TouchableOpacity>
 
         <KeyboardAvoidingView
           style={styles.flex}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 44 : 0}>
+          keyboardVerticalOffset={Platform.OS === 'ios' ? verticalScale(44) : 0}>
           <ScrollView
             contentContainerStyle={styles.scroll}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
             bounces={false}>
+            <View style={styles.contentWrap}>
             <View style={styles.brand}>
               <Image
                 source={require('../assets/splash-screen-logo.png')}
-                style={styles.logo}
+                style={[styles.logo, logoSize]}
                 resizeMode="contain"
               />
               <Text style={styles.tagline}>
@@ -190,15 +229,24 @@ export const VerifyOtpScreen: React.FC<Props> = ({navigation, route}) => {
               </Text>
             </View>
 
-            <Text style={styles.title}>Verify Your Number</Text>
+            <Text style={styles.title}>
+              {isRegisterFlow ? 'Verify to Register' : 'Verify Your Number'}
+            </Text>
             <Text style={styles.subtitle}>
-              We&apos;ve sent a 6-digit OTP to
+              {isRegisterFlow
+                ? 'Enter the OTP to verify your phone and continue signup'
+                : "We've sent a 6-digit OTP to"}
             </Text>
             <View style={styles.phoneRow}>
               <Text style={styles.phone}>{phoneMasked}</Text>
               <TouchableOpacity
                 onPress={() => navigation.navigate('Login')}
-                hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}>
+                hitSlop={{
+                  top: scale(8),
+                  bottom: scale(8),
+                  left: scale(8),
+                  right: scale(8),
+                }}>
                 <Text style={styles.edit}>
                   Edit ✎
                 </Text>
@@ -221,7 +269,7 @@ export const VerifyOtpScreen: React.FC<Props> = ({navigation, route}) => {
             
             <View style={styles.validityRow}>
               <View style={styles.validityBadge}>
-                <ShieldIcon size={18} color={colors.green} />
+                <ShieldIcon size={moderateScale(18)} color={colors.green} />
               </View>
               <Text style={styles.validityText}>
                 Your OTP is valid for {validityMinutes} minutes
@@ -255,16 +303,17 @@ export const VerifyOtpScreen: React.FC<Props> = ({navigation, route}) => {
             ) : null}
 
             <GradientButton
-              title="Verify & Continue"
+              title={isRegisterFlow ? 'Verify & Continue' : 'Verify & Sign In'}
               onPress={onVerify}
               loading={verifying}
               style={styles.verifyBtn}
             />
+            </View>
           </ScrollView>
 
           <View style={styles.secureFooter}>
             <View style={styles.lockCircle}>
-              <LockIcon size={16} color={colors.muted} />
+              <LockIcon size={moderateScale(16)} color={colors.muted} />
             </View>
             <View style={styles.secureTextCol}>
               <Text style={styles.secureTitle}>
@@ -286,51 +335,57 @@ const styles = StyleSheet.create({
   flex: {flex: 1},
   backBtn: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 50 : 12,
+    top: Platform.OS === 'ios' ? verticalScale(50) : verticalScale(12),
     left: spacing.lg,
     zIndex: 10,
-    width: 36,
-    height: 36,
+    width: moderateScale(36),
+    height: moderateScale(36),
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: verticalScale(20),
   },
   backText: {
-    fontSize: 24,
+    fontSize: moderateScale(24),
     color: colors.navy,
     fontWeight: '400',
   },
   scroll: {
     flexGrow: 1,
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xl + 6,
+    paddingTop: spacing.xl + verticalScale(6),
     paddingBottom: spacing.lg,
+    alignItems: 'center',
+  },
+  contentWrap: {
+    width: '100%',
+    maxWidth: maxContentWidth(),
   },
   brand: {
     alignSelf: 'center',
     alignItems: 'center',
-    marginBottom: spacing.xl + 4,
+    marginBottom: spacing.xl + scale(4),
   },
   logo: {
-    width: 220,
-    height: 150,
+    width: scale(220),
+    aspectRatio: 220 / 150,
   },
   tagline: {
-    marginTop: -10,
-    fontSize: 13,
+    marginTop: verticalScale(-10),
+    fontSize: moderateScale(13),
     fontWeight: '500',
     color: '#5F6981',
     textAlign: 'center',
   },
   title: {
     ...typography.hero,
-    fontSize: 24,
-    lineHeight: 48,
+    fontSize: moderateScale(24),
+    lineHeight: moderateScale(48),
     textAlign: 'center',
     marginBottom: spacing.sm,
   },
   subtitle: {
     ...typography.body,
-    fontSize: 14,
+    fontSize: moderateScale(14),
     textAlign: 'center',
     color: '#5B647B',
   },
@@ -341,14 +396,16 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     marginBottom: spacing.xl,
     gap: spacing.sm,
+    flexWrap: 'wrap',
   },
   phone: {
-    fontSize: 17,
+    fontSize: moderateScale(17),
     fontWeight: '800',
     color: colors.navy,
+    flexShrink: 1,
   },
   edit: {
-    fontSize: 16,
+    fontSize: moderateScale(16),
     fontWeight: '700',
     color: colors.green,
   },
@@ -357,7 +414,7 @@ const styles = StyleSheet.create({
   },
   devHint: {
     marginTop: spacing.sm,
-    fontSize: 12,
+    fontSize: moderateScale(12),
     color: colors.orange,
     fontWeight: '600',
   },
@@ -367,33 +424,36 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: spacing.lg,
     gap: spacing.sm,
+    flexWrap: 'wrap',
   },
   validityBadge: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: moderateScale(30),
+    height: moderateScale(30),
+    borderRadius: moderateScale(15),
     backgroundColor: '#DCFCE7',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  validityIcon: {fontSize: 14},
+  validityIcon: {fontSize: moderateScale(14)},
   validityText: {
-    fontSize: 14,
+    fontSize: moderateScale(14),
     color: colors.muted,
     fontWeight: '600',
+    flexShrink: 1,
   },
   resendPill: {
     marginTop: spacing.lg,
     backgroundColor: '#F1F3F6',
     borderRadius: radii.pill,
-    paddingVertical: 16,
+    paddingVertical: verticalScale(16),
     paddingHorizontal: spacing.lg,
     alignItems: 'center',
   },
   resendText: {
-    fontSize: 14,
+    fontSize: moderateScale(14),
     color: '#5F6981',
     fontWeight: '600',
+    textAlign: 'center',
   },
   resendTimer: {
     color: colors.green,
@@ -407,12 +467,12 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: colors.error,
-    fontSize: 14,
+    fontSize: moderateScale(14),
     fontWeight: '600',
     textAlign: 'center',
   },
   verifyBtn: {
-    marginTop: spacing.lg + 4,
+    marginTop: spacing.lg + scale(4),
   },
   secureFooter: {
     flexDirection: 'row',
@@ -425,25 +485,29 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: 'rgba(0,0,0,0.06)',
     backgroundColor: 'rgba(255,255,255,0.6)',
+    maxWidth: maxContentWidth(),
+    alignSelf: 'center',
+    width: '100%',
   },
   lockCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: moderateScale(40),
+    height: moderateScale(40),
+    borderRadius: moderateScale(20),
     backgroundColor: '#DCFCE7',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
-  lockIcon: {fontSize: 18},
-  secureTextCol: {},
+  lockIcon: {fontSize: moderateScale(18)},
+  secureTextCol: {flexShrink: 1},
   secureTitle: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     fontWeight: '600',
     color: '#5F6981',
   },
   secureSub: {
-    marginTop: 2,
-    fontSize: 12,
+    marginTop: verticalScale(2),
+    fontSize: moderateScale(12),
     color: '#5F6981',
     fontWeight: '600',
   },

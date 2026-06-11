@@ -1,8 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
-  Dimensions,
   FlatList,
   Modal,
   Pressable,
@@ -12,6 +10,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import {
   SafeAreaView,
@@ -25,6 +24,7 @@ import {
 } from '../services/orderApi';
 import { useGetConfigQuery } from '../services/configApi';
 import { useGetPosInitQuery } from '../services/posApi';
+import { showDialog } from '../context/DialogProvider';
 import { resolveCurrencySymbol } from '../utils/currency';
 import { paymentBadgeLabel } from '../utils/ordersList';
 import {
@@ -37,12 +37,24 @@ import {
   PaymentBadge,
   ScreenBackground,
   TopHeader,
+  TopHeaderAction,
 } from '../components/ui';
 import { colors, getBrandHeroColors, radii, spacing, typography } from '../theme';
+import {
+  isTablet,
+  maxContentWidth,
+  moderateScale,
+  scale,
+  verticalScale,
+} from '../utils/responsive';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { MainTabParamList, ProfileStackParamList } from '../navigation/types';
+import { OrdersStackParamList } from '../navigation/types';
 
 const PAGE_SIZE = 20;
+
+function filterSidebarWidth(windowWidth: number) {
+  return Math.min(scale(120), windowWidth * 0.32);
+}
 
 const STATUS_FILTERS: { label: string; value?: string }[] = [
   { label: 'All' },
@@ -58,8 +70,6 @@ const DELIVERY_FILTERS: { label: string; value?: string }[] = [
   { label: 'Takeaway', value: 'takeaway' },
   { label: 'Delivery', value: 'delivery' },
 ];
-
-const FILTER_SIDEBAR_W = Math.min(120, Dimensions.get('window').width * 0.32);
 
 type FilterSection = 'status' | 'delivery';
 
@@ -121,7 +131,7 @@ function FilterOptionRow({
         {label}
       </Text>
       {selected ? (
-        <CheckIcon size={18} color={brand.hero} strokeWidth={3} />
+        <CheckIcon size={moderateScale(18)} color={brand.hero} strokeWidth={3} />
       ) : null}
     </TouchableOpacity>
   );
@@ -153,6 +163,8 @@ function OrdersFilterPanel({
   onApply,
 }: OrdersFilterPanelProps) {
   const insets = useSafeAreaInsets();
+  const {width: windowWidth} = useWindowDimensions();
+  const sidebarW = filterSidebarWidth(windowWidth);
   const { data: appConfig } = useGetConfigQuery();
   const brand = useMemo(
     () => getBrandHeroColors(appConfig?.data?.branding),
@@ -171,7 +183,9 @@ function OrdersFilterPanel({
       presentationStyle="fullScreen"
       onRequestClose={onClose}>
       <View style={styles.filterPanelRoot}>
-        <SafeAreaView style={styles.filterSidebar} edges={['top', 'left', 'bottom']}>
+        <SafeAreaView
+          style={[styles.filterSidebar, {width: sidebarW}]}
+          edges={['top', 'left', 'bottom']}>
           <Text style={styles.filterSidebarTitle}>Filters</Text>
           {FILTER_SECTIONS.map(s => {
             const hasValue =
@@ -290,12 +304,12 @@ function OrderDetailModal({
   const [cancelOrders, { isLoading: cancelling }] = useCancelOrdersMutation();
   const [removingLineId, setRemovingLineId] = useState<string | null>(null);
 
+  const {height: windowHeight} = useWindowDimensions();
   const modalItemsListHeight = useMemo(() => {
-    const { height: windowHeight } = Dimensions.get('window');
     const sheetMax = windowHeight * 0.88;
-    const reserved = 340;
-    return Math.min(360, Math.max(180, sheetMax - reserved));
-  }, []);
+    const reserved = verticalScale(340);
+    return Math.min(verticalScale(360), Math.max(verticalScale(180), sheetMax - reserved));
+  }, [windowHeight]);
 
   if (!order) {
     return null;
@@ -321,11 +335,11 @@ function OrderDetailModal({
       }).unwrap();
       await onOrdersChanged();
       if (res.removedAll && res.remainingQuantity === 0) {
-        Alert.alert('Item removed', res.message ?? 'Line item removed.');
+        showDialog('Item removed', res.message ?? 'Line item removed.');
       }
     } catch (e: unknown) {
       const err = e as { data?: { message?: string }; error?: string };
-      Alert.alert(
+      showDialog(
         'Could not remove item',
         err?.data?.message ?? err?.error ?? 'Please try again.',
       );
@@ -337,7 +351,7 @@ function OrderDetailModal({
   const confirmRemoveLine = (line: OrderListItem['items'][0]) => {
     const qty = line.quantity;
     if (qty <= 1) {
-      Alert.alert(
+      showDialog(
         'Remove item',
         `Remove "${line.title}" from this order?`,
         [
@@ -352,7 +366,7 @@ function OrderDetailModal({
       return;
     }
 
-    Alert.alert(
+    showDialog(
       'Remove item',
       `"${line.title}" · ×${qty}`,
       [
@@ -371,7 +385,7 @@ function OrderDetailModal({
   };
 
   const confirmCancelOrder = () => {
-    Alert.alert(
+    showDialog(
       'Cancel order',
       `Cancel order ${order.tokenNo}? This cannot be undone.`,
       [
@@ -392,10 +406,10 @@ function OrderDetailModal({
       }).unwrap();
       await onOrdersChanged();
       onClose();
-      Alert.alert('Order cancelled', res.message ?? 'Order cancelled.');
+      showDialog('Order cancelled', res.message ?? 'Order cancelled.');
     } catch (e: unknown) {
       const err = e as { data?: { message?: string }; error?: string };
-      Alert.alert(
+      showDialog(
         'Cancel failed',
         err?.data?.message ?? err?.error ?? 'Please try again.',
       );
@@ -554,7 +568,7 @@ function OrderDetailModal({
   );
 }
 
-export const OrdersScreen: React.FC<NativeStackScreenProps<MainTabParamList, 'Orders'>> = ({ navigation }) => {
+export const OrdersScreen: React.FC<NativeStackScreenProps<OrdersStackParamList, 'OrdersMain'>> = ({ navigation }) => {
   const { data: posInit } = useGetPosInitQuery();
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string | undefined>();
@@ -691,24 +705,31 @@ export const OrdersScreen: React.FC<NativeStackScreenProps<MainTabParamList, 'Or
     <ScreenBackground>
       <SafeAreaView style={styles.safe} edges={['top']}>
         <TopHeader
-          title="Order history"
+          title="Today's Orders"
           showBack={true}
           onBack={() => { navigation.goBack(); }}
           right={
-            <TouchableOpacity
-              style={styles.filterTrigger}
-              onPress={openFilters}
-              activeOpacity={0.85}
-              accessibilityLabel="Open filters">
-              <FilterIcon size={20} color={colors.navy} />
-              {activeFilterCount > 0 ? (
-                <View style={styles.filterTriggerBadge}>
-                  <Text style={styles.filterTriggerBadgeText}>
-                    {activeFilterCount}
-                  </Text>
-                </View>
-              ) : null}
-            </TouchableOpacity>
+            <View style={styles.headerRight}>
+              <TopHeaderAction
+                label="History"
+                onPress={() => navigation.navigate('SalesOrders')}
+                accessibilityLabel="View sales orders history"
+              />
+              <TouchableOpacity
+                style={styles.filterTrigger}
+                onPress={openFilters}
+                activeOpacity={0.85}
+                accessibilityLabel="Open filters">
+                <FilterIcon size={moderateScale(20)} color={colors.navy} />
+                {activeFilterCount > 0 ? (
+                  <View style={styles.filterTriggerBadge}>
+                    <Text style={styles.filterTriggerBadgeText}>
+                      {activeFilterCount}
+                    </Text>
+                  </View>
+                ) : null}
+              </TouchableOpacity>
+            </View>
           }
         />
 
@@ -770,7 +791,14 @@ export const OrdersScreen: React.FC<NativeStackScreenProps<MainTabParamList, 'Or
           <FlatList
             data={orders}
             keyExtractor={item => item.id}
-            contentContainerStyle={styles.listContent}
+            contentContainerStyle={[
+              styles.listContent,
+              isTablet() && {
+                maxWidth: maxContentWidth(),
+                width: '100%',
+                alignSelf: 'center',
+              },
+            ]}
             onEndReached={loadMore}
             onEndReachedThreshold={0.35}
             refreshControl={
@@ -797,7 +825,7 @@ export const OrdersScreen: React.FC<NativeStackScreenProps<MainTabParamList, 'Or
             }
             ListEmptyComponent={
               <Card style={styles.emptyCard}>
-                <ClipboardIcon size={44} color={colors.muted} />
+                <ClipboardIcon size={moderateScale(44)} color={colors.muted} />
                 <Text style={styles.emptyTitle}>
                   {isError ? 'Could not load orders' : 'No orders yet'}
                 </Text>
@@ -815,7 +843,7 @@ export const OrdersScreen: React.FC<NativeStackScreenProps<MainTabParamList, 'Or
                 <Card style={styles.orderCard}>
                   <View
                     style={[styles.orderIcon, { backgroundColor: '#DCFCE7' }]}>
-                    <CartIcon size={20} color={colors.navy} />
+                    <CartIcon size={moderateScale(20)} color={colors.navy} />
                   </View>
                   <View style={styles.orderBody}>
                     <View style={styles.orderTop}>
@@ -875,6 +903,12 @@ export const OrdersScreen: React.FC<NativeStackScreenProps<MainTabParamList, 'Or
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: scale(8),
+  },
   centered: {
     flex: 1,
     alignItems: 'center',
@@ -882,8 +916,8 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xxxl,
   },
   filterTrigger: {
-    width: 40,
-    height: 40,
+    width: scale(40),
+    height: scale(40),
     borderRadius: radii.md,
     backgroundColor: colors.white,
     borderWidth: 1,
@@ -893,26 +927,26 @@ const styles = StyleSheet.create({
   },
   filterTriggerBadge: {
     position: 'absolute',
-    top: -4,
-    right: -4,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
+    top: scale(-4),
+    right: scale(-4),
+    minWidth: scale(18),
+    height: scale(18),
+    borderRadius: scale(9),
     backgroundColor: colors.green,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: scale(4),
     borderWidth: 2,
     borderColor: colors.white,
   },
   filterTriggerBadgeText: {
-    fontSize: 10,
+    fontSize: moderateScale(10),
     fontWeight: '800',
     color: colors.white,
   },
   countBadge: {
-    minWidth: 40,
-    height: 40,
+    minWidth: scale(40),
+    height: scale(40),
     borderRadius: radii.md,
     backgroundColor: colors.navy,
     alignItems: 'center',
@@ -921,7 +955,7 @@ const styles = StyleSheet.create({
   },
   countBadgeText: {
     color: colors.green,
-    fontSize: 14,
+    fontSize: moderateScale(14),
     fontWeight: '800',
   },
   appliedFiltersBar: {
@@ -942,17 +976,17 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   appliedFiltersText: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     fontWeight: '600',
     color: colors.navy,
   },
   appliedFiltersEdit: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     fontWeight: '700',
     color: colors.green,
   },
   appliedFiltersClear: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     fontWeight: '700',
     color: colors.error,
   },
@@ -962,14 +996,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
   },
   filterSidebar: {
-    width: FILTER_SIDEBAR_W,
     backgroundColor: colors.borderLight,
     borderRightWidth: 1,
     borderRightColor: colors.border,
     paddingTop: spacing.md,
   },
   filterSidebarTitle: {
-    fontSize: 11,
+    fontSize: moderateScale(11),
     fontWeight: '800',
     color: colors.muted,
     textTransform: 'uppercase',
@@ -987,7 +1020,7 @@ const styles = StyleSheet.create({
     borderLeftColor: 'transparent',
   },
   filterSidebarItemText: {
-    fontSize: 14,
+    fontSize: moderateScale(14),
     fontWeight: '600',
     color: colors.muted,
   },
@@ -996,9 +1029,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   filterSidebarDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: scale(8),
+    height: scale(8),
+    borderRadius: scale(4),
   },
   filterMain: {
     flex: 1,
@@ -1017,20 +1050,20 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   filterMainTitle: {
-    fontSize: 18,
+    fontSize: moderateScale(18),
     fontWeight: '800',
     color: colors.navy,
   },
   filterCloseBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: scale(36),
+    height: scale(36),
+    borderRadius: scale(18),
     backgroundColor: colors.borderLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
   filterCloseText: {
-    fontSize: 16,
+    fontSize: moderateScale(16),
     color: colors.muted,
     fontWeight: '700',
   },
@@ -1053,12 +1086,12 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   filterOptionLabel: {
-    fontSize: 15,
+    fontSize: moderateScale(15),
     fontWeight: '600',
     color: colors.navy,
   },
   filterOptionCheck: {
-    fontSize: 16,
+    fontSize: moderateScale(16),
     fontWeight: '800',
   },
   filterFooter: {
@@ -1073,25 +1106,25 @@ const styles = StyleSheet.create({
   },
   filterResetBtn: {
     flex: 1,
-    paddingVertical: 14,
+    paddingVertical: verticalScale(14),
     borderRadius: radii.lg,
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: 'center',
   },
   filterResetText: {
-    fontSize: 15,
+    fontSize: moderateScale(15),
     fontWeight: '700',
     color: colors.navy,
   },
   filterApplyBtn: {
     flex: 1,
-    paddingVertical: 14,
+    paddingVertical: verticalScale(14),
     borderRadius: radii.lg,
     alignItems: 'center',
   },
   filterApplyText: {
-    fontSize: 15,
+    fontSize: moderateScale(15),
     fontWeight: '800',
     color: colors.white,
   },
@@ -1100,7 +1133,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   listFooterText: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     color: colors.muted,
     fontWeight: '600',
   },
@@ -1112,14 +1145,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  summaryLabel: { fontSize: 12, fontWeight: '700', color: colors.muted },
+  summaryLabel: { fontSize: moderateScale(12), fontWeight: '700', color: colors.muted },
   summaryValue: {
-    fontSize: 22,
+    fontSize: moderateScale(22),
     fontWeight: '800',
     color: colors.navy,
-    marginTop: 2,
+    marginTop: verticalScale(2),
   },
-  summaryHint: { fontSize: 12, color: colors.muted, maxWidth: '42%', alignSelf: 'flex-start' },
+  summaryHint: { fontSize: moderateScale(12), color: colors.muted, maxWidth: '42%', alignSelf: 'flex-start' },
   listContent: {
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.md,
@@ -1131,13 +1164,13 @@ const styles = StyleSheet.create({
     padding: spacing.xxl,
     alignItems: 'center',
   },
-  emptyEmoji: { fontSize: 44, marginBottom: spacing.md },
-  emptyTitle: { fontSize: 20, fontWeight: '800', color: colors.navy },
+  emptyEmoji: { fontSize: moderateScale(44), marginBottom: spacing.md },
+  emptyTitle: { fontSize: moderateScale(20), fontWeight: '800', color: colors.navy },
   emptyText: {
     marginTop: spacing.sm,
     textAlign: 'center',
     ...typography.body,
-    fontSize: 15,
+    fontSize: moderateScale(15),
   },
   orderCard: {
     flexDirection: 'row',
@@ -1146,14 +1179,14 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   orderIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: scale(44),
+    height: scale(44),
+    borderRadius: scale(22),
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
   },
-  orderBody: { flex: 1 },
+  orderBody: { flex: 1, minWidth: 0 },
   orderTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1161,20 +1194,21 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   orderTitle: {
-    fontSize: 15,
+    fontSize: moderateScale(15),
     fontWeight: '700',
     color: colors.navy,
     flex: 1,
+    minWidth: 0,
   },
   customerName: {
     marginTop: spacing.sm,
-    fontSize: 16,
+    fontSize: moderateScale(16),
     fontWeight: '600',
     color: colors.navy,
   },
   metaText: {
-    marginTop: 4,
-    fontSize: 13,
+    marginTop: verticalScale(4),
+    fontSize: moderateScale(13),
     color: colors.muted,
   },
   itemsPreview: {
@@ -1184,14 +1218,14 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
   },
   itemPreviewLine: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     color: colors.navy,
     fontWeight: '500',
-    marginTop: 2,
+    marginTop: verticalScale(2),
   },
   itemPreviewMore: {
-    marginTop: 4,
-    fontSize: 12,
+    marginTop: verticalScale(4),
+    fontSize: moderateScale(12),
     fontWeight: '600',
     color: colors.green,
   },
@@ -1203,12 +1237,12 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   amountValue: {
-    fontSize: 20,
+    fontSize: moderateScale(20),
     fontWeight: '800',
     color: colors.navy,
   },
   dueText: {
-    fontSize: 14,
+    fontSize: moderateScale(14),
     fontWeight: '600',
     color: colors.orange,
   },
@@ -1231,9 +1265,9 @@ const styles = StyleSheet.create({
   },
   modalHandle: {
     alignSelf: 'center',
-    width: 40,
-    height: 4,
-    borderRadius: 2,
+    width: scale(40),
+    height: verticalScale(4),
+    borderRadius: scale(2),
     backgroundColor: colors.border,
     marginTop: spacing.sm,
     marginBottom: spacing.md,
@@ -1246,25 +1280,25 @@ const styles = StyleSheet.create({
   },
   modalHeaderText: { flex: 1 },
   modalTitle: {
-    fontSize: 20,
+    fontSize: moderateScale(20),
     fontWeight: '800',
     color: colors.navy,
   },
   modalSub: {
-    marginTop: 4,
-    fontSize: 14,
+    marginTop: verticalScale(4),
+    fontSize: moderateScale(14),
     color: colors.muted,
   },
   modalCloseBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: scale(36),
+    height: scale(36),
+    borderRadius: scale(18),
     backgroundColor: colors.borderLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
   modalCloseText: {
-    fontSize: 16,
+    fontSize: moderateScale(16),
     color: colors.muted,
     fontWeight: '700',
   },
@@ -1276,19 +1310,19 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   modalMetaTime: {
-    fontSize: 12,
+    fontSize: moderateScale(12),
     color: colors.muted,
     fontWeight: '600',
   },
   modalMetaExtra: {
     marginTop: spacing.sm,
-    fontSize: 13,
+    fontSize: moderateScale(13),
     color: colors.muted,
   },
   modalSectionLabel: {
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
-    fontSize: 12,
+    fontSize: moderateScale(12),
     fontWeight: '800',
     color: colors.muted,
     textTransform: 'uppercase',
@@ -1310,7 +1344,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   modalEmptyItems: {
-    fontSize: 14,
+    fontSize: moderateScale(14),
     color: colors.muted,
     paddingVertical: spacing.lg,
   },
@@ -1321,46 +1355,46 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
-  modalLineBody: { flex: 1, paddingRight: spacing.md },
+  modalLineBody: { flex: 1, paddingRight: spacing.md, minWidth: 0 },
   modalLineTitle: {
-    fontSize: 15,
+    fontSize: moderateScale(15),
     fontWeight: '700',
     color: colors.navy,
   },
   modalLineVariant: {
-    marginTop: 2,
-    fontSize: 13,
+    marginTop: verticalScale(2),
+    fontSize: moderateScale(13),
     color: colors.muted,
   },
   modalLineNotes: {
-    marginTop: 4,
-    fontSize: 12,
+    marginTop: verticalScale(4),
+    fontSize: moderateScale(12),
     color: colors.orange,
     fontStyle: 'italic',
   },
-  modalLineRight: { alignItems: 'flex-end' },
+  modalLineRight: { alignItems: 'flex-end', flexShrink: 0 },
   modalLineQty: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     fontWeight: '700',
     color: colors.muted,
   },
   modalLinePrice: {
-    marginTop: 2,
-    fontSize: 15,
+    marginTop: verticalScale(2),
+    fontSize: moderateScale(15),
     fontWeight: '800',
     color: colors.navy,
   },
   modalLineRemoveBtn: {
     marginTop: spacing.sm,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+    paddingVertical: verticalScale(4),
+    paddingHorizontal: scale(8),
     borderRadius: radii.md,
     backgroundColor: colors.errorBg,
-    minWidth: 64,
+    minWidth: scale(64),
     alignItems: 'center',
   },
   modalLineRemoveText: {
-    fontSize: 12,
+    fontSize: moderateScale(12),
     fontWeight: '800',
     color: colors.error,
   },
@@ -1371,51 +1405,51 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
   },
   modalFooterLabel: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     color: colors.muted,
     fontWeight: '600',
   },
   modalFooterTotal: {
-    marginTop: 4,
-    fontSize: 24,
+    marginTop: verticalScale(4),
+    fontSize: moderateScale(24),
     fontWeight: '800',
     color: colors.green,
   },
   modalFooterHint: {
-    marginTop: 4,
-    fontSize: 12,
+    marginTop: verticalScale(4),
+    fontSize: moderateScale(12),
     color: colors.muted,
   },
   modalDue: {
     marginTop: spacing.sm,
-    fontSize: 14,
+    fontSize: moderateScale(14),
     fontWeight: '700',
     color: colors.orange,
   },
   modalCancelOrderBtn: {
     marginTop: spacing.lg,
-    paddingVertical: 14,
+    paddingVertical: verticalScale(14),
     borderRadius: radii.lg,
     borderWidth: 1,
     borderColor: colors.error,
     backgroundColor: colors.errorBg,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 48,
+    minHeight: verticalScale(48),
   },
   modalCancelOrderBtnDisabled: {
     opacity: 0.6,
   },
   modalCancelOrderText: {
-    fontSize: 15,
+    fontSize: moderateScale(15),
     fontWeight: '800',
     color: colors.error,
   },
   modalCancelledHint: {
     marginTop: spacing.lg,
-    fontSize: 13,
+    fontSize: moderateScale(13),
     color: colors.muted,
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: moderateScale(18),
   },
 });

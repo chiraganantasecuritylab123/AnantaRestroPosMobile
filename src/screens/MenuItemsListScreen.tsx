@@ -4,9 +4,9 @@ import {
   FlatList,
   Image,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -18,20 +18,25 @@ import type {ProfileStackParamList} from '../navigation/types';
 import {handleProfileStackBack} from '../navigation/profileStackBack';
 import {
   Card,
-  SearchIcon,
   TopHeader,
   TopHeaderAction,
   UtensilsIcon,
 } from '../components/ui';
 import {colors, radii, spacing} from '../theme';
 import {resolveCurrencySymbol} from '../utils/currency';
+import {
+  isTablet,
+  maxContentWidth,
+  moderateScale,
+  scale,
+  verticalScale,
+} from '../utils/responsive';
 
 type Props = NativeStackScreenProps<ProfileStackParamList, 'MenuItemsList'>;
 
 const ALL_CATEGORIES = '__all__';
 
 export const MenuItemsListScreen: React.FC<Props> = ({navigation, route}) => {
-  const [query, setQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>(ALL_CATEGORIES);
   const {data, isLoading, isFetching, isError, refetch} = useGetPosInitQuery();
 
@@ -62,21 +67,13 @@ export const MenuItemsListScreen: React.FC<Props> = ({navigation, route}) => {
   }, [menuItems, categories.length]);
 
   const items = useMemo(() => {
-    const q = query.trim().toLowerCase();
     return menuItems.filter(item => {
-      if (categoryFilter !== ALL_CATEGORIES) {
-        if (String(item.category_id) !== categoryFilter) {
-          return false;
-        }
-      }
-      if (!q) {
+      if (categoryFilter === ALL_CATEGORIES) {
         return true;
       }
-      const title = (item.title ?? '').toLowerCase();
-      const category = (item.category_title ?? '').toLowerCase();
-      return title.includes(q) || category.includes(q);
+      return String(item.category_id) === categoryFilter;
     });
-  }, [menuItems, query, categoryFilter]);
+  }, [menuItems, categoryFilter]);
 
   const openEdit = (item: MenuItem) => {
     const itemId = String(item.id ?? '');
@@ -100,7 +97,7 @@ export const MenuItemsListScreen: React.FC<Props> = ({navigation, route}) => {
       <View style={styles.statsRow}>
         <View style={[styles.statCard, styles.statTotal]}>
           <Text style={styles.statValue}>{stats.total}</Text>
-          <Text style={styles.statLabel}>Dishes</Text>
+          <Text style={styles.statLabel}>Items</Text>
         </View>
         <View style={[styles.statCard, styles.statActive]}>
           <Text style={styles.statValue}>{stats.enabled}</Text>
@@ -112,31 +109,23 @@ export const MenuItemsListScreen: React.FC<Props> = ({navigation, route}) => {
         </View>
       </View>
 
-      <Card style={styles.toolsCard}>
-        <View style={styles.searchWrap}>
-          <SearchIcon size={18} color={colors.muted} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search by name or category…"
-            placeholderTextColor={colors.mutedLight}
-            value={query}
-            onChangeText={setQuery}
-          />
-        </View>
-
-        {categories.length > 0 ? (
-          <View style={styles.filterRow}>
+      {categories.length > 0 ? (
+        <View style={styles.categoryScrollWrap}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.categoryScroll}>
             <TouchableOpacity
               style={[
-                styles.filterChip,
-                categoryFilter === ALL_CATEGORIES && styles.filterChipActive,
+                styles.categoryPill,
+                categoryFilter === ALL_CATEGORIES && styles.categoryPillActive,
               ]}
               onPress={() => setCategoryFilter(ALL_CATEGORIES)}
               activeOpacity={0.85}>
               <Text
                 style={[
-                  styles.filterText,
-                  categoryFilter === ALL_CATEGORIES && styles.filterTextActive,
+                  styles.categoryPillText,
+                  categoryFilter === ALL_CATEGORIES && styles.categoryPillTextActive,
                 ]}>
                 All
               </Text>
@@ -146,27 +135,23 @@ export const MenuItemsListScreen: React.FC<Props> = ({navigation, route}) => {
               return (
                 <TouchableOpacity
                   key={cat.id}
-                  style={[styles.filterChip, active && styles.filterChipActive]}
+                  style={[styles.categoryPill, active && styles.categoryPillActive]}
                   onPress={() => setCategoryFilter(cat.id)}
                   activeOpacity={0.85}>
                   <Text
-                    style={[styles.filterText, active && styles.filterTextActive]}
+                    style={[
+                      styles.categoryPillText,
+                      active && styles.categoryPillTextActive,
+                    ]}
                     numberOfLines={1}>
                     {cat.title}
                   </Text>
                 </TouchableOpacity>
               );
             })}
-          </View>
-        ) : null}
-
-        <Text style={styles.resultCount}>
-          {items.length} item{items.length === 1 ? '' : 's'}
-          {categoryFilter !== ALL_CATEGORIES
-            ? ` · ${categories.find(c => c.id === categoryFilter)?.title ?? ''}`
-            : ''}
-        </Text>
-      </Card>
+          </ScrollView>
+        </View>
+      ) : null}
     </View>
   );
 
@@ -194,7 +179,7 @@ export const MenuItemsListScreen: React.FC<Props> = ({navigation, route}) => {
         ) : isError ? (
           <View style={styles.center}>
             <Card style={styles.emptyCard}>
-              <UtensilsIcon size={44} color={colors.muted} />
+              <UtensilsIcon size={moderateScale(44)} color={colors.muted} />
               <Text style={styles.emptyTitle}>Could not load menu</Text>
               <Text style={styles.emptyText}>
                 Check your connection and try again.
@@ -208,7 +193,14 @@ export const MenuItemsListScreen: React.FC<Props> = ({navigation, route}) => {
           <FlatList
             data={items}
             keyExtractor={item => String(item.id)}
-            contentContainerStyle={styles.listContent}
+            contentContainerStyle={[
+              styles.listContent,
+              isTablet() && {
+                maxWidth: maxContentWidth(),
+                width: '100%',
+                alignSelf: 'center',
+              },
+            ]}
             ListHeaderComponent={listHeader}
             refreshControl={
               <RefreshControl
@@ -220,14 +212,14 @@ export const MenuItemsListScreen: React.FC<Props> = ({navigation, route}) => {
             }
             ListEmptyComponent={
               <Card style={styles.emptyCard}>
-                <UtensilsIcon size={44} color={colors.muted} />
+                <UtensilsIcon size={moderateScale(44)} color={colors.muted} />
                 <Text style={styles.emptyTitle}>No dishes found</Text>
                 <Text style={styles.emptyText}>
-                  {query.trim() || categoryFilter !== ALL_CATEGORIES
-                    ? 'Try another search or category filter.'
+                  {categoryFilter !== ALL_CATEGORIES
+                    ? 'Try another category filter.'
                     : 'Add your first menu item to show it on POS.'}
                 </Text>
-                {!query.trim() && categoryFilter === ALL_CATEGORIES ? (
+                {categoryFilter === ALL_CATEGORIES ? (
                   <TouchableOpacity
                     style={styles.primaryBtn}
                     onPress={() => navigation.navigate('CreateMenuItem')}>
@@ -283,7 +275,7 @@ function MenuItemRow({
             />
           ) : (
             <View style={[styles.thumb, styles.thumbPh]}>
-              <UtensilsIcon size={22} color={colors.muted} />
+              <UtensilsIcon size={moderateScale(22)} color={colors.muted} />
             </View>
           )}
 
@@ -301,7 +293,7 @@ function MenuItemRow({
               ) : null}
             </View>
 
-            <Text style={styles.categoryPill} numberOfLines={1}>
+            <Text style={styles.itemCategoryLabel} numberOfLines={1}>
               {item.category_title ?? 'Uncategorized'}
             </Text>
 
@@ -354,65 +346,56 @@ const styles = StyleSheet.create({
   statActive: {backgroundColor: '#DCFCE7'},
   statCat: {backgroundColor: '#FFEDD5'},
   statValue: {
-    fontSize: 22,
+    fontSize: moderateScale(22),
     fontWeight: '800',
     color: colors.navy,
   },
   statLabel: {
-    marginTop: 2,
-    fontSize: 11,
+    marginTop: verticalScale(2),
+    fontSize: moderateScale(11),
     fontWeight: '700',
     color: colors.muted,
   },
-  toolsCard: {
-    padding: spacing.lg,
-    gap: spacing.md,
+  categoryScrollWrap: {
+    height: verticalScale(50),
+    marginHorizontal: -spacing.xl,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+    paddingBottom: spacing.sm,
   },
-  searchWrap: {
-    flexDirection: 'row',
+  categoryScroll: {
     alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.background,
-    borderRadius: radii.md,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: verticalScale(6),
+    gap: scale(10),
+    paddingRight: scale(40),
+  },
+  categoryPill: {
+    minHeight: verticalScale(40),
+    justifyContent: 'center',
+    paddingHorizontal: scale(16),
+    paddingVertical: verticalScale(8),
+    borderRadius: moderateScale(10),
+    backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.border,
-    paddingHorizontal: spacing.md,
   },
-  searchInput: {
-    flex: 1,
-    paddingVertical: 11,
-    fontSize: 15,
-    color: colors.navy,
-  },
-  filterRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  filterChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: radii.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
-    maxWidth: '48%',
-  },
-  filterChipActive: {
+  categoryPillActive: {
     backgroundColor: colors.green,
     borderColor: colors.green,
   },
-  filterText: {
-    fontSize: 13,
+  categoryPillText: {
+    fontSize: moderateScale(14),
     fontWeight: '600',
     color: colors.navy,
+    lineHeight: verticalScale(18),
   },
-  filterTextActive: {
+  categoryPillTextActive: {
     color: colors.white,
     fontWeight: '700',
   },
   resultCount: {
-    fontSize: 12,
+    fontSize: moderateScale(12),
     fontWeight: '600',
     color: colors.muted,
   },
@@ -432,32 +415,32 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
   },
   emptyEmoji: {
-    fontSize: 40,
+    fontSize: moderateScale(40),
     marginBottom: spacing.md,
   },
   emptyTitle: {
-    fontSize: 18,
+    fontSize: moderateScale(18),
     fontWeight: '800',
     color: colors.navy,
   },
   emptyText: {
     marginTop: spacing.sm,
-    fontSize: 14,
+    fontSize: moderateScale(14),
     color: colors.muted,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: moderateScale(20),
   },
   primaryBtn: {
     marginTop: spacing.lg,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingHorizontal: scale(20),
+    paddingVertical: verticalScale(12),
     borderRadius: radii.lg,
     backgroundColor: colors.green,
   },
   primaryBtnText: {
     color: colors.white,
     fontWeight: '700',
-    fontSize: 15,
+    fontSize: moderateScale(15),
   },
   itemCard: {
     padding: spacing.md,
@@ -471,8 +454,8 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   thumb: {
-    width: 72,
-    height: 72,
+    width: scale(72),
+    height: scale(72),
     borderRadius: radii.lg,
     backgroundColor: colors.borderLight,
   },
@@ -481,7 +464,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   thumbPhText: {
-    fontSize: 28,
+    fontSize: moderateScale(28),
     opacity: 0.35,
   },
   itemBody: {
@@ -495,7 +478,7 @@ const styles = StyleSheet.create({
   },
   itemTitle: {
     flex: 1,
-    fontSize: 16,
+    fontSize: moderateScale(16),
     fontWeight: '800',
     color: colors.navy,
   },
@@ -504,52 +487,52 @@ const styles = StyleSheet.create({
   },
   offBadge: {
     backgroundColor: '#FEE2E2',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: scale(8),
+    paddingVertical: verticalScale(3),
     borderRadius: radii.pill,
   },
   offBadgeText: {
-    fontSize: 10,
+    fontSize: moderateScale(10),
     fontWeight: '800',
     color: '#B91C1C',
   },
-  categoryPill: {
+  itemCategoryLabel: {
     alignSelf: 'flex-start',
-    marginTop: 4,
-    fontSize: 12,
+    marginTop: verticalScale(4),
+    fontSize: moderateScale(12),
     fontWeight: '600',
     color: colors.muted,
     backgroundColor: colors.borderLight,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: scale(8),
+    paddingVertical: verticalScale(3),
     borderRadius: radii.pill,
     overflow: 'hidden',
   },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: 8,
-    marginTop: 8,
+    gap: scale(8),
+    marginTop: verticalScale(8),
   },
   netPrice: {
-    fontSize: 18,
+    fontSize: moderateScale(18),
     fontWeight: '800',
     color: colors.green,
   },
   mrpPrice: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     fontWeight: '600',
     color: colors.muted,
     textDecorationLine: 'line-through',
   },
   taxLine: {
-    marginTop: 4,
-    fontSize: 11,
+    marginTop: verticalScale(4),
+    fontSize: moderateScale(11),
     color: colors.mutedLight,
     fontWeight: '500',
   },
   chevron: {
-    fontSize: 24,
+    fontSize: moderateScale(24),
     color: colors.mutedLight,
     fontWeight: '300',
   },

@@ -1,7 +1,6 @@
 import React, {useMemo, useState} from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   RefreshControl,
   StyleSheet,
@@ -22,15 +21,25 @@ import type {ProfileStackParamList} from '../navigation/types';
 import {handleProfileStackBack} from '../navigation/profileStackBack';
 import {
   Card,
+  EditIcon,
   Icon,
   PackageIcon,
   PlusIcon,
   SearchIcon,
   TopHeader,
   TopHeaderAction,
+  TrashIcon,
 } from '../components/ui';
 import type {IconName} from '../components/ui';
+import {showDialog} from '../context/DialogProvider';
 import {colors, radii, spacing} from '../theme';
+import {
+  isTablet,
+  maxContentWidth,
+  moderateScale,
+  scale,
+  verticalScale,
+} from '../utils/responsive';
 
 type Props = NativeStackScreenProps<ProfileStackParamList, 'InventoryList'>;
 
@@ -75,7 +84,7 @@ export const InventoryListScreen: React.FC<Props> = ({navigation, route}) => {
   const counts = data?.statusCounts;
 
   const onDelete = (item: InventoryItem) => {
-    Alert.alert(
+    showDialog(
       'Delete item',
       `Remove "${item.title}" from inventory?`,
       [
@@ -88,7 +97,7 @@ export const InventoryListScreen: React.FC<Props> = ({navigation, route}) => {
               await deleteItem(item.id).unwrap();
             } catch (e: unknown) {
               const err = e as {data?: {message?: string}};
-              Alert.alert(
+              showDialog(
                 'Delete failed',
                 err?.data?.message ?? 'Could not delete item.',
               );
@@ -97,6 +106,14 @@ export const InventoryListScreen: React.FC<Props> = ({navigation, route}) => {
         },
       ],
     );
+  };
+
+  const openDetail = (item: InventoryItem) => {
+    navigation.navigate('InventoryDetail', {
+      itemId: item.id,
+      title: item.title,
+      unit: item.unit,
+    });
   };
 
   const openEdit = (item: InventoryItem) => {
@@ -142,7 +159,7 @@ export const InventoryListScreen: React.FC<Props> = ({navigation, route}) => {
 
       <Card style={styles.toolsCard}>
         <View style={styles.searchWrap}>
-          <SearchIcon size={18} color={colors.muted} />
+          <SearchIcon size={moderateScale(18)} color={colors.muted} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search inventory…"
@@ -203,7 +220,7 @@ export const InventoryListScreen: React.FC<Props> = ({navigation, route}) => {
         ) : isError ? (
           <View style={styles.center}>
             <Card style={styles.emptyCard}>
-              <PackageIcon size={44} color={colors.muted} />
+              <PackageIcon size={moderateScale(44)} color={colors.muted} />
               <Text style={styles.emptyTitle}>Could not load inventory</Text>
               <Text style={styles.emptyText}>
                 Check your connection and try again.
@@ -217,7 +234,14 @@ export const InventoryListScreen: React.FC<Props> = ({navigation, route}) => {
           <FlatList
             data={items}
             keyExtractor={item => item.id}
-            contentContainerStyle={styles.listContent}
+            contentContainerStyle={[
+              styles.listContent,
+              isTablet() && {
+                maxWidth: maxContentWidth(),
+                width: '100%',
+                alignSelf: 'center',
+              },
+            ]}
             ListHeaderComponent={listHeader}
             refreshControl={
               <RefreshControl
@@ -229,7 +253,7 @@ export const InventoryListScreen: React.FC<Props> = ({navigation, route}) => {
             }
             ListEmptyComponent={
               <Card style={styles.emptyCard}>
-                <PackageIcon size={44} color={colors.muted} />
+                <PackageIcon size={moderateScale(44)} color={colors.muted} />
                 <Text style={styles.emptyTitle}>No items found</Text>
                 <Text style={styles.emptyText}>
                   {query.trim()
@@ -248,6 +272,7 @@ export const InventoryListScreen: React.FC<Props> = ({navigation, route}) => {
             renderItem={({item}) => (
               <InventoryRow
                 item={item}
+                onOpen={() => openDetail(item)}
                 onEdit={() => openEdit(item)}
                 onDelete={() => onDelete(item)}
               />
@@ -296,10 +321,12 @@ function StatCard({
 
 function InventoryRow({
   item,
+  onOpen,
   onEdit,
   onDelete,
 }: {
   item: InventoryItem;
+  onOpen: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -310,11 +337,11 @@ function InventoryRow({
     <Card style={styles.itemCard}>
       <View style={styles.itemTop}>
         <View style={[styles.itemIcon, {backgroundColor: badge.bg}]}>
-          <Icon name={badge.iconName} size={18} color={badge.text} />
+          <Icon name={badge.iconName} size={moderateScale(18)} color={badge.text} />
         </View>
         <TouchableOpacity
           style={styles.itemBody}
-          onPress={onEdit}
+          onPress={onOpen}
           activeOpacity={0.85}>
           <View style={styles.itemTitleRow}>
             <Text style={styles.itemTitle} numberOfLines={1}>
@@ -342,16 +369,25 @@ function InventoryRow({
       </View>
       <View style={styles.itemActions}>
         <TouchableOpacity
+          style={styles.stockBtn}
+          onPress={onOpen}
+          activeOpacity={0.85}
+          accessibilityLabel="Stock movements">
+          <Icon name="clipboard" size={moderateScale(18)} color={colors.green} />
+        </TouchableOpacity>
+        <TouchableOpacity
           style={styles.editBtn}
           onPress={onEdit}
-          activeOpacity={0.85}>
-          <Text style={styles.editBtnText}>Edit</Text>
+          activeOpacity={0.85}
+          accessibilityLabel="Edit item">
+          <EditIcon size={moderateScale(18)} color={colors.white} />
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.deleteBtn}
           onPress={onDelete}
-          activeOpacity={0.85}>
-          <Text style={styles.deleteBtnText}>Delete</Text>
+          activeOpacity={0.85}
+          accessibilityLabel="Delete item">
+          <TrashIcon size={moderateScale(18)} color={colors.error} />
         </TouchableOpacity>
       </View>
     </Card>
@@ -388,7 +424,7 @@ const styles = StyleSheet.create({
   statLow: {backgroundColor: '#FEF3C7'},
   statOut: {backgroundColor: '#FEE2E2'},
   statValue: {
-    fontSize: 22,
+    fontSize: moderateScale(22),
     fontWeight: '800',
     color: colors.navy,
   },
@@ -396,8 +432,8 @@ const styles = StyleSheet.create({
     color: colors.navy,
   },
   statLabel: {
-    marginTop: 2,
-    fontSize: 11,
+    marginTop: verticalScale(2),
+    fontSize: moderateScale(11),
     fontWeight: '700',
     color: colors.muted,
     textAlign: 'center',
@@ -421,18 +457,18 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    paddingVertical: 11,
-    fontSize: 15,
+    paddingVertical: verticalScale(11),
+    fontSize: moderateScale(15),
     color: colors.navy,
   },
   filterRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: scale(8),
   },
   filterChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(8),
     borderRadius: radii.pill,
     borderWidth: 1,
     borderColor: colors.border,
@@ -443,7 +479,7 @@ const styles = StyleSheet.create({
     borderColor: colors.green,
   },
   filterText: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     fontWeight: '600',
     color: colors.navy,
   },
@@ -452,7 +488,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   resultCount: {
-    fontSize: 12,
+    fontSize: moderateScale(12),
     fontWeight: '600',
     color: colors.muted,
   },
@@ -472,32 +508,32 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
   },
   emptyEmoji: {
-    fontSize: 40,
+    fontSize: moderateScale(40),
     marginBottom: spacing.md,
   },
   emptyTitle: {
-    fontSize: 18,
+    fontSize: moderateScale(18),
     fontWeight: '800',
     color: colors.navy,
   },
   emptyText: {
     marginTop: spacing.sm,
-    fontSize: 14,
+    fontSize: moderateScale(14),
     color: colors.muted,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: moderateScale(20),
   },
   retryBtn: {
     marginTop: spacing.lg,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingHorizontal: scale(20),
+    paddingVertical: verticalScale(12),
     borderRadius: radii.lg,
     backgroundColor: colors.green,
   },
   retryText: {
     color: colors.white,
     fontWeight: '700',
-    fontSize: 15,
+    fontSize: moderateScale(15),
   },
   itemCard: {
     padding: spacing.lg,
@@ -507,14 +543,14 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   itemIcon: {
-    width: 44,
-    height: 44,
+    width: scale(44),
+    height: scale(44),
     borderRadius: radii.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
   itemIconText: {
-    fontSize: 18,
+    fontSize: moderateScale(18),
     fontWeight: '800',
   },
   itemBody: {
@@ -528,22 +564,22 @@ const styles = StyleSheet.create({
   },
   itemTitle: {
     flex: 1,
-    fontSize: 16,
+    fontSize: moderateScale(16),
     fontWeight: '800',
     color: colors.navy,
   },
   statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: scale(8),
+    paddingVertical: verticalScale(4),
     borderRadius: radii.pill,
   },
   statusBadgeText: {
-    fontSize: 10,
+    fontSize: moderateScale(10),
     fontWeight: '800',
   },
   itemQty: {
-    marginTop: 6,
-    fontSize: 20,
+    marginTop: verticalScale(6),
+    fontSize: moderateScale(20),
     fontWeight: '800',
     color: colors.green,
   },
@@ -551,48 +587,51 @@ const styles = StyleSheet.create({
     color: colors.orange,
   },
   itemMeta: {
-    marginTop: 2,
-    fontSize: 12,
+    marginTop: verticalScale(2),
+    fontSize: moderateScale(12),
     color: colors.muted,
     fontWeight: '500',
   },
   itemLinked: {
-    marginTop: 4,
-    fontSize: 11,
+    marginTop: verticalScale(4),
+    fontSize: moderateScale(11),
     color: colors.mutedLight,
   },
   itemActions: {
     flexDirection: 'row',
+    justifyContent: 'flex-end',
     gap: spacing.sm,
     marginTop: spacing.md,
     paddingTop: spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
   },
+  stockBtn: {
+    width: scale(40),
+    height: scale(40),
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.green,
+    backgroundColor: '#ECFDF3',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   editBtn: {
-    flex: 1,
-    paddingVertical: 10,
+    width: scale(40),
+    height: scale(40),
     borderRadius: radii.md,
     backgroundColor: colors.navy,
     alignItems: 'center',
-  },
-  editBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.white,
+    justifyContent: 'center',
   },
   deleteBtn: {
-    flex: 1,
-    paddingVertical: 10,
+    width: scale(40),
+    height: scale(40),
     borderRadius: radii.md,
     borderWidth: 1,
     borderColor: colors.error,
     backgroundColor: colors.errorBg,
     alignItems: 'center',
-  },
-  deleteBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.error,
+    justifyContent: 'center',
   },
 });

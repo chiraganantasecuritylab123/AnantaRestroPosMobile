@@ -1,13 +1,10 @@
-import React, {useCallback, useMemo, useState} from 'react';
-import {useFocusEffect} from '@react-navigation/native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   KeyboardAvoidingView,
-  Modal,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,26 +12,40 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   launchCamera,
   launchImageLibrary,
   type Asset,
 } from 'react-native-image-picker';
-import type {NativeStackScreenProps} from '@react-navigation/native-stack';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
   menuItemImageValue,
   resolveMediaUrl,
   useCreateMenuItemMutation,
-  useCreateTaxMutation,
   useGetCategoriesQuery,
   useGetTaxesQuery,
   useUploadImageMutation,
 } from '../services/menuApi';
-import {useGetPosInitQuery} from '../services/posApi';
-import type {ProfileStackParamList} from '../navigation/types';
-import {CameraIcon, Card, CloseIcon, GradientButton, TopHeader} from '../components/ui';
-import {cardShadow, colors, radii, spacing} from '../theme';
+import { useGetPosInitQuery } from '../services/posApi';
+import type { ProfileStackParamList } from '../navigation/types';
+import { useNavigationLeaveGuard } from '../context/NavigationLeaveGuardContext';
+import { showDialog } from '../context/DialogProvider';
+import {
+  CameraIcon,
+  Card,
+  ConfirmDialog,
+  GradientButton,
+  SelectBox,
+  TopHeader,
+} from '../components/ui';
+import { cardShadow, colors, radii, spacing } from '../theme';
+import {
+  maxContentWidth,
+  moderateScale,
+  scale,
+  verticalScale,
+} from '../utils/responsive';
 import {
   ensureCameraPermission,
   ensureGalleryPermission,
@@ -49,10 +60,10 @@ function assetFileMeta(asset: Asset) {
     asset.fileName ??
     `menu-${Date.now()}.${(asset.type ?? 'image/jpeg').split('/')[1] || 'jpg'}`;
   const mimeType = asset.type ?? 'image/jpeg';
-  return {uri, fileName, mimeType};
+  return { uri, fileName, mimeType };
 }
 
-export const CreateMenuItemScreen: React.FC<Props> = ({navigation}) => {
+export const CreateMenuItemScreen: React.FC<Props> = ({ navigation }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
@@ -63,12 +74,14 @@ export const CreateMenuItemScreen: React.FC<Props> = ({navigation}) => {
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [taxId, setTaxId] = useState<string | null>(null);
 
-  const [taxModalOpen, setTaxModalOpen] = useState(false);
-  const [newTaxTitle, setNewTaxTitle] = useState('');
-  const [newTaxRate, setNewTaxRate] = useState('');
-  const [newTaxType, setNewTaxType] = useState<'percentage' | 'exclusive'>(
-    'percentage',
-  );
+  const [discardConfirmVisible, setDiscardConfirmVisible] = useState(false);
+  const allowLeaveRef = useRef(false);
+  const hasDraftDataRef = useRef(false);
+  const pendingProceedRef = useRef<(() => void) | undefined>(undefined);
+  const pendingNavActionRef = useRef<
+    Parameters<typeof navigation.dispatch>[0] | undefined
+  >(undefined);
+  const { setGuard, attemptNavigation } = useNavigationLeaveGuard();
 
   const {
     data: apiCategories,
@@ -76,7 +89,7 @@ export const CreateMenuItemScreen: React.FC<Props> = ({navigation}) => {
     isError: categoriesApiError,
     refetch: refetchCategories,
   } = useGetCategoriesQuery();
-  const {data: posInit} = useGetPosInitQuery(undefined, {
+  const { data: posInit } = useGetPosInitQuery(undefined, {
     skip: !categoriesApiError && (apiCategories?.length ?? 0) > 0,
   });
   const {
@@ -86,35 +99,146 @@ export const CreateMenuItemScreen: React.FC<Props> = ({navigation}) => {
     refetch: refetchTaxes,
   } = useGetTaxesQuery();
 
-  const [createTax, {isLoading: creatingTax}] = useCreateTaxMutation();
-  const [createMenuItem, {isLoading: creatingItem}] =
+  const [createMenuItem, { isLoading: creatingItem }] =
     useCreateMenuItemMutation();
-  const [uploadImage, {isLoading: uploadingImage}] = useUploadImageMutation();
+  const [uploadImage, { isLoading: uploadingImage }] = useUploadImageMutation();
 
   useFocusEffect(
     useCallback(() => {
       void refetchCategories();
-    }, [refetchCategories]),
+      void refetchTaxes();
+    }, [refetchCategories, refetchTaxes]),
   );
 
   const categories = useMemo(() => {
     const list = apiCategories?.length
       ? apiCategories
       : (posInit?.categories ?? []).map(c => ({
-          id: String(c.id),
-          title: c.title,
-          is_enabled: c.is_enabled,
-        }));
+        id: String(c.id),
+        title: c.title,
+        is_enabled: c.is_enabled,
+      }));
     return list.filter(
       c => (c.is_enabled ?? c.isEnabled ?? true) !== false,
     );
   }, [apiCategories, posInit?.categories]);
 
-  const selectedCategory = categories.find(c => c.id === categoryId);
-  const selectedTax = taxes.find(t => t.id === taxId);
+  const categoryOptions = useMemo(
+    () =>
+      categories.map(category => ({
+        id: category.id,
+        label: category.title,
+      })),
+    [categories],
+  );
+
+  const taxOptions = useMemo(
+    () =>
+      taxes.map(tax => ({
+        id: tax.id,
+        label: `${tax.title} (${tax.rate}%)`,
+        subtitle: tax.type,
+      })),
+    [taxes],
+  );
+
   const previewImage =
     localPreviewUri ||
     (uploadedImagePath ? resolveMediaUrl(uploadedImagePath) : '');
+
+  const hasDraftData = useMemo(
+    () =>
+      Boolean(
+        title.trim() ||
+        description.trim() ||
+        price.trim() ||
+        netPrice.trim() ||
+        categoryId ||
+        taxId ||
+        localPreviewUri ||
+        uploadedImagePath,
+      ),
+    [
+      title,
+      description,
+      price,
+      netPrice,
+      categoryId,
+      taxId,
+      localPreviewUri,
+      uploadedImagePath,
+    ],
+  );
+
+  hasDraftDataRef.current = hasDraftData;
+
+  const confirmDiscard = useCallback(() => {
+    setDiscardConfirmVisible(false);
+    allowLeaveRef.current = true;
+
+    const proceed = pendingProceedRef.current;
+    pendingProceedRef.current = undefined;
+    if (proceed) {
+      proceed();
+      return;
+    }
+
+    const action = pendingNavActionRef.current;
+    pendingNavActionRef.current = undefined;
+    if (action) {
+      navigation.dispatch(action);
+      return;
+    }
+    navigation.goBack();
+  }, [navigation]);
+
+  const cancelDiscard = useCallback(() => {
+    setDiscardConfirmVisible(false);
+    pendingProceedRef.current = undefined;
+    pendingNavActionRef.current = undefined;
+  }, []);
+
+  const promptDiscard = useCallback((onProceed: () => void) => {
+    pendingProceedRef.current = onProceed;
+    pendingNavActionRef.current = undefined;
+    setDiscardConfirmVisible(true);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      allowLeaveRef.current = false;
+      setGuard({
+        hasUnsavedChanges: () =>
+          hasDraftDataRef.current && !allowLeaveRef.current,
+        promptDiscard,
+      });
+      return () => setGuard(null);
+    }, [setGuard, promptDiscard]),
+  );
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', event => {
+      if (allowLeaveRef.current || !hasDraftData) {
+        return;
+      }
+
+      event.preventDefault();
+      pendingNavActionRef.current = event.data.action;
+      pendingProceedRef.current = undefined;
+      setDiscardConfirmVisible(true);
+    });
+
+    return unsubscribe;
+  }, [navigation, hasDraftData]);
+
+  const guardedNavigate = useCallback(
+    (action: () => void) => {
+      if (attemptNavigation(action)) {
+        action();
+      }
+    },
+    [attemptNavigation],
+  );
 
   const resetImage = () => {
     setUploadedImagePath('');
@@ -123,9 +247,9 @@ export const CreateMenuItemScreen: React.FC<Props> = ({navigation}) => {
   };
 
   const uploadPickedAsset = async (asset: Asset) => {
-    const {uri, fileName, mimeType} = assetFileMeta(asset);
+    const { uri, fileName, mimeType } = assetFileMeta(asset);
     if (!uri) {
-      Alert.alert('Image', 'Could not read the selected photo.');
+      showDialog('Image', 'Could not read the selected photo.');
       return;
     }
 
@@ -134,13 +258,13 @@ export const CreateMenuItemScreen: React.FC<Props> = ({navigation}) => {
     setUploadedFileName('');
 
     try {
-      const res = await uploadImage({uri, fileName, mimeType}).unwrap();
+      const res = await uploadImage({ uri, fileName, mimeType }).unwrap();
       setUploadedImagePath(res.url);
       setUploadedFileName(res.filename ?? fileName);
     } catch (e: unknown) {
       setLocalPreviewUri('');
-      const err = e as {error?: string; data?: {message?: string}};
-      Alert.alert(
+      const err = e as { error?: string; data?: { message?: string } };
+      showDialog(
         'Upload failed',
         err?.data?.message ?? err?.error ?? 'Could not upload image.',
       );
@@ -161,7 +285,7 @@ export const CreateMenuItemScreen: React.FC<Props> = ({navigation}) => {
 
     if (result.errorCode) {
       if (!handlePickerPermissionError(result.errorCode, 'gallery')) {
-        Alert.alert(
+        showDialog(
           'Gallery',
           result.errorMessage ?? 'Could not open photo library.',
         );
@@ -189,11 +313,11 @@ export const CreateMenuItemScreen: React.FC<Props> = ({navigation}) => {
 
     if (result.errorCode) {
       if (result.errorCode === 'camera_unavailable') {
-        Alert.alert('Camera', 'Camera is not available on this device.');
+        showDialog('Camera', 'Camera is not available on this device.');
         return;
       }
       if (!handlePickerPermissionError(result.errorCode, 'camera')) {
-        Alert.alert('Camera', result.errorMessage ?? 'Could not open camera.');
+        showDialog('Camera', result.errorMessage ?? 'Could not open camera.');
       }
       return;
     }
@@ -205,10 +329,10 @@ export const CreateMenuItemScreen: React.FC<Props> = ({navigation}) => {
   };
 
   const onChooseImage = () => {
-    Alert.alert('Menu image', 'Choose a source', [
-      {text: 'Gallery', onPress: () => void onPickFromGallery()},
-      {text: 'Camera', onPress: () => void onTakePhoto()},
-      {text: 'Cancel', style: 'cancel'},
+    showDialog('Menu image', 'Choose a source', [
+      { text: 'Gallery', onPress: () => void onPickFromGallery() },
+      { text: 'Camera', onPress: () => void onTakePhoto() },
+      { text: 'Cancel', style: 'cancel' },
     ]);
   };
 
@@ -219,55 +343,31 @@ export const CreateMenuItemScreen: React.FC<Props> = ({navigation}) => {
     }
   };
 
-  const onAddTax = async () => {
-    const nextTitle = newTaxTitle.trim();
-    const rate = newTaxRate.trim();
-    if (!nextTitle || !rate) {
-      Alert.alert('Tax', 'Enter tax name and rate.');
-      return;
-    }
-    try {
-      const res = await createTax({
-        title: nextTitle,
-        rate,
-        type: newTaxType,
-      }).unwrap();
-      setTaxId(res.taxId);
-      setNewTaxTitle('');
-      setNewTaxRate('');
-      setTaxModalOpen(false);
-      refetchTaxes();
-    } catch (e: unknown) {
-      const err = e as {data?: {message?: string}};
-      Alert.alert('Could not add tax', err?.data?.message ?? 'Please try again.');
-    }
-  };
-
   const onSubmit = async () => {
     if (!title.trim()) {
-      Alert.alert('Menu item', 'Enter item name.');
+      showDialog('Menu item', 'Enter item name.');
       return;
     }
     if (!price.trim() || !netPrice.trim()) {
-      Alert.alert('Menu item', 'Enter price and net price.');
+      showDialog('Menu item', 'Enter price and net price.');
       return;
     }
     if (!categoryId) {
-      Alert.alert('Menu item', 'Select a category.');
+      showDialog('Menu item', 'Select a category.');
       return;
     }
     if (!taxId) {
-      Alert.alert('Menu item', 'Select a tax.');
+      showDialog('Menu item', 'Select a tax.');
       return;
     }
     if (!uploadedImagePath.trim()) {
-      Alert.alert('Menu item', 'Upload an image before saving.');
+      showDialog('Menu item', 'Upload an image before saving.');
       return;
     }
 
     const image = menuItemImageValue(uploadedImagePath);
     if (!image) {
-      Alert.alert('Menu item', 'Uploaded image URL is invalid.');
+      showDialog('Menu item', 'Uploaded image URL is invalid.');
       return;
     }
 
@@ -282,7 +382,7 @@ export const CreateMenuItemScreen: React.FC<Props> = ({navigation}) => {
         image,
       }).unwrap();
 
-      Alert.alert('Success', res.message ?? 'Menu item added.', [
+      showDialog('Success', res.message ?? 'Menu item added.', [
         {
           text: 'Add another',
           onPress: () => {
@@ -293,11 +393,17 @@ export const CreateMenuItemScreen: React.FC<Props> = ({navigation}) => {
             resetImage();
           },
         },
-        {text: 'Done', onPress: () => navigation.goBack()},
+        {
+          text: 'Done',
+          onPress: () => {
+            allowLeaveRef.current = true;
+            navigation.goBack();
+          },
+        },
       ]);
     } catch (e: unknown) {
-      const err = e as {data?: {message?: string}};
-      Alert.alert(
+      const err = e as { data?: { message?: string } };
+      showDialog(
         'Could not add item',
         err?.data?.message ?? 'Please check fields and try again.',
       );
@@ -327,6 +433,7 @@ export const CreateMenuItemScreen: React.FC<Props> = ({navigation}) => {
           />
 
           <ScrollView
+            style={styles.scrollView}
             contentContainerStyle={styles.scroll}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}>
@@ -374,77 +481,41 @@ export const CreateMenuItemScreen: React.FC<Props> = ({navigation}) => {
               title="Category"
               hint="Groups items on the POS menu"
               actionLabel="Manage"
-              onAction={() => navigation.navigate('CategoriesList')}>
-              {loadingLists ? (
-                <ActivityIndicator color={colors.green} style={styles.loader} />
-              ) : categories.length === 0 ? (
-                <Text style={styles.emptyHint}>
-                  No categories yet. Tap Manage to create one.
-                </Text>
-              ) : (
-                <View style={styles.chipGrid}>
-                  {categories.map(cat => {
-                    const active = categoryId === cat.id;
-                    return (
-                      <SelectChip
-                        key={cat.id}
-                        label={cat.title}
-                        active={active}
-                        onPress={() => setCategoryId(cat.id)}
-                      />
-                    );
-                  })}
-                </View>
-              )}
-              {selectedCategory ? (
-                <View style={styles.selectedPill}>
-                  <Text style={styles.selectedPillText}>
-                    ✓ {selectedCategory.title}
-                  </Text>
-                </View>
-              ) : null}
+              onAction={() =>
+                guardedNavigate(() => navigation.navigate('CategoriesList'))
+              }>
+              <SelectBox
+                label="Category"
+                placeholder="Select category"
+                value={categoryId}
+                options={categoryOptions}
+                onChange={setCategoryId}
+                loading={loadingLists}
+                emptyHint="No categories yet. Tap Manage to create one."
+              />
             </SectionCard>
 
             <SectionCard
               step="3"
               title="Tax"
               hint="Applied when billing"
-              actionLabel="+ New"
-              onAction={() => setTaxModalOpen(true)}>
-              {taxesError ? (
-                <TouchableOpacity onPress={() => refetchTaxes()}>
-                  <Text style={styles.errorHint}>
-                    Could not load taxes. Tap to retry.
-                  </Text>
-                </TouchableOpacity>
-              ) : loadingTaxes ? (
-                <ActivityIndicator color={colors.green} style={styles.loader} />
-              ) : taxes.length === 0 ? (
-                <Text style={styles.emptyHint}>
-                  No taxes yet. Tap + New to create one.
-                </Text>
-              ) : (
-                <View style={styles.chipGrid}>
-                  {taxes.map(tax => {
-                    const active = taxId === tax.id;
-                    return (
-                      <SelectChip
-                        key={tax.id}
-                        label={`${tax.title} (${tax.rate}%)`}
-                        active={active}
-                        onPress={() => setTaxId(tax.id)}
-                      />
-                    );
-                  })}
-                </View>
-              )}
-              {selectedTax ? (
-                <View style={styles.selectedPill}>
-                  <Text style={styles.selectedPillText}>
-                    ✓ {selectedTax.title} · {selectedTax.type}
-                  </Text>
-                </View>
-              ) : null}
+              actionLabel="Manage"
+              onAction={() =>
+                guardedNavigate(() => navigation.navigate('TaxesList'))
+              }>
+              <SelectBox
+                label="Tax"
+                placeholder="Select tax"
+                value={taxId}
+                options={taxOptions}
+                onChange={setTaxId}
+                loading={loadingTaxes}
+                errorHint={
+                  taxesError ? 'Could not load taxes. Tap to retry.' : undefined
+                }
+                onRetry={() => refetchTaxes()}
+                emptyHint="No taxes yet. Tap Manage to create one."
+              />
             </SectionCard>
 
             <SectionCard
@@ -462,14 +533,17 @@ export const CreateMenuItemScreen: React.FC<Props> = ({navigation}) => {
                   ]}>
                   {previewImage ? (
                     <Image
-                      source={{uri: previewImage}}
+                      source={{ uri: previewImage }}
                       style={styles.previewImage}
                       resizeMode="cover"
                     />
                   ) : (
                     <View style={styles.previewEmpty}>
                       <View style={styles.previewIconCircle}>
-                        <CameraIcon size={32} color={colors.muted} />
+                        <CameraIcon
+                          size={moderateScale(32)}
+                          color={colors.muted}
+                        />
                       </View>
                       <Text style={styles.previewEmptyTitle}>Add dish photo</Text>
                       <Text style={styles.previewEmptyText}>
@@ -515,65 +589,30 @@ export const CreateMenuItemScreen: React.FC<Props> = ({navigation}) => {
                 </Text>
               )}
             </SectionCard>
+            <View style={styles.footer}>
+              <GradientButton
+                title={creatingItem ? 'Saving…' : 'Save menu item'}
+                onPress={onSubmit}
+                loading={creatingItem}
+                disabled={creatingItem || !canSave}
+                showArrow={false}
+              />
+            </View>
           </ScrollView>
-
-          <View style={styles.footer}>
-            <GradientButton
-              title={creatingItem ? 'Saving…' : 'Save menu item'}
-              onPress={onSubmit}
-              loading={creatingItem}
-              disabled={creatingItem || !canSave}
-              showArrow={false}
-            />
-          </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
 
-      <FormModal
-        visible={taxModalOpen}
-        title="New tax"
-        onClose={() => setTaxModalOpen(false)}>
-        <Field
-          label="Tax name"
-          value={newTaxTitle}
-          onChangeText={setNewTaxTitle}
-          placeholder="GST 12%"
-        />
-        <Field
-          label="Rate (%)"
-          value={newTaxRate}
-          onChangeText={setNewTaxRate}
-          placeholder="12"
-          keyboardType="decimal-pad"
-        />
-        <Text style={styles.modalLabel}>Type</Text>
-        <View style={styles.typeRow}>
-          {(['percentage', 'exclusive'] as const).map(type => {
-            const active = newTaxType === type;
-            return (
-              <TouchableOpacity
-                key={type}
-                style={[styles.typeChip, active && styles.typeChipActive]}
-                onPress={() => setNewTaxType(type)}>
-                <Text
-                  style={[
-                    styles.typeChipText,
-                    active && styles.typeChipTextActive,
-                  ]}>
-                  {type}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-        <GradientButton
-          title={creatingTax ? 'Adding…' : 'Add tax'}
-          onPress={onAddTax}
-          loading={creatingTax}
-          disabled={creatingTax}
-          showArrow={false}
-        />
-      </FormModal>
+      <ConfirmDialog
+        visible={discardConfirmVisible}
+        title="Discard changes?"
+        message="You have unsaved menu item details. Leave without saving?"
+        confirmLabel="Discard"
+        cancelLabel="Keep editing"
+        destructive
+        onConfirm={confirmDiscard}
+        onCancel={cancelDiscard}
+      />
+
     </View>
   );
 };
@@ -608,34 +647,13 @@ function SectionCard({
           </View>
         </View>
         {actionLabel && onAction ? (
-          <TouchableOpacity onPress={onAction} hitSlop={8}>
+          <TouchableOpacity onPress={onAction} hitSlop={scale(8)}>
             <Text style={styles.sectionAction}>{actionLabel}</Text>
           </TouchableOpacity>
         ) : null}
       </View>
       <View style={styles.sectionCardBody}>{children}</View>
     </Card>
-  );
-}
-
-function SelectChip({
-  label,
-  active,
-  onPress,
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <TouchableOpacity
-      style={[styles.chip, active && styles.chipActive]}
-      onPress={onPress}
-      activeOpacity={0.85}>
-      <Text style={[styles.chipText, active && styles.chipTextActive]}>
-        {label}
-      </Text>
-    </TouchableOpacity>
   );
 }
 
@@ -673,50 +691,18 @@ function Field({
   );
 }
 
-function FormModal({
-  visible,
-  title,
-  onClose,
-  children,
-}: {
-  visible: boolean;
-  title: string;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}>
-      <View style={styles.modalBackdrop}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={styles.modalSheet}>
-          <View style={styles.modalHandle} />
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>{title}</Text>
-            <TouchableOpacity
-              style={styles.modalCloseBtn}
-              onPress={onClose}
-              hitSlop={8}>
-              <CloseIcon size={22} color={colors.navy} />
-            </TouchableOpacity>
-          </View>
-          {children}
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
 const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: '#F8FAF8',
   },
-  flex: {flex: 1},
-  safe: {flex: 1},
+  flex: { flex: 1 },
+  safe: { flex: 1 },
+  scrollView: {
+    width: '100%',
+    alignSelf: 'center',
+    maxWidth: maxContentWidth(),
+  },
   scroll: {
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.sm,
@@ -746,34 +732,38 @@ const styles = StyleSheet.create({
     paddingRight: spacing.sm,
   },
   stepBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: moderateScale(28),
+    height: moderateScale(28),
+    borderRadius: moderateScale(14),
     backgroundColor: colors.navy,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   stepBadgeText: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     fontWeight: '800',
     color: colors.white,
   },
-  sectionCardTitles: {flex: 1},
+  sectionCardTitles: { flex: 1, flexShrink: 1 },
   sectionCardTitle: {
-    fontSize: 16,
+    fontSize: moderateScale(16),
     fontWeight: '800',
     color: colors.navy,
+    flexShrink: 1,
   },
   sectionCardHint: {
-    marginTop: 2,
-    fontSize: 12,
+    marginTop: verticalScale(2),
+    fontSize: moderateScale(12),
     color: colors.muted,
-    lineHeight: 17,
+    lineHeight: moderateScale(17),
+    flexShrink: 1,
   },
   sectionAction: {
-    fontSize: 14,
+    fontSize: moderateScale(14),
     fontWeight: '700',
     color: colors.green,
+    flexShrink: 0,
   },
   sectionCardBody: {
     padding: spacing.lg,
@@ -782,31 +772,31 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   fieldLabel: {
-    fontSize: 11,
+    fontSize: moderateScale(11),
     fontWeight: '700',
     color: colors.muted,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
-    marginBottom: 8,
+    marginBottom: verticalScale(8),
   },
   input: {
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radii.md,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
+    paddingHorizontal: scale(14),
+    paddingVertical: verticalScale(12),
+    fontSize: moderateScale(16),
     fontWeight: '500',
     color: colors.navy,
   },
   inputMultiline: {
-    minHeight: 96,
+    minHeight: verticalScale(96),
     textAlignVertical: 'top',
   },
   rowFields: {
     flexDirection: 'row',
-    gap: 12,
+    gap: scale(12),
     marginBottom: 0,
   },
   halfField: {
@@ -815,11 +805,11 @@ const styles = StyleSheet.create({
   chipGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: scale(8),
   },
   chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: scale(14),
+    paddingVertical: verticalScale(10),
     borderRadius: radii.pill,
     borderWidth: 1,
     borderColor: colors.border,
@@ -830,9 +820,10 @@ const styles = StyleSheet.create({
     borderColor: colors.green,
   },
   chipText: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     fontWeight: '600',
     color: colors.navy,
+    flexShrink: 1,
   },
   chipTextActive: {
     color: colors.white,
@@ -843,25 +834,28 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     backgroundColor: '#ECFDF5',
     borderRadius: radii.pill,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(6),
     borderWidth: 1,
     borderColor: '#BBF7D0',
   },
   selectedPillText: {
-    fontSize: 12,
+    fontSize: moderateScale(12),
     fontWeight: '700',
     color: colors.greenDark,
+    flexShrink: 1,
   },
   emptyHint: {
-    fontSize: 14,
+    fontSize: moderateScale(14),
     color: colors.muted,
-    lineHeight: 20,
+    lineHeight: moderateScale(20),
+    flexShrink: 1,
   },
   errorHint: {
-    fontSize: 14,
+    fontSize: moderateScale(14),
     color: colors.error,
     fontWeight: '600',
+    flexShrink: 1,
   },
   loader: {
     marginVertical: spacing.md,
@@ -882,7 +876,7 @@ const styles = StyleSheet.create({
   },
   previewImage: {
     width: '100%',
-    height: '100%',
+    aspectRatio: 4 / 3,
   },
   previewEmpty: {
     flex: 1,
@@ -891,89 +885,90 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
   },
   previewIconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: moderateScale(56),
+    height: moderateScale(56),
+    borderRadius: moderateScale(28),
     backgroundColor: '#ECFDF5',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.md,
   },
   previewEmptyIcon: {
-    fontSize: 26,
+    fontSize: moderateScale(26),
   },
   previewEmptyTitle: {
-    fontSize: 16,
+    fontSize: moderateScale(16),
     fontWeight: '800',
     color: colors.navy,
+    flexShrink: 1,
   },
   previewEmptyText: {
-    marginTop: 4,
-    fontSize: 13,
+    marginTop: verticalScale(4),
+    fontSize: moderateScale(13),
     color: colors.muted,
     fontWeight: '500',
+    flexShrink: 1,
   },
   previewOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(15, 23, 42, 0.55)',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: scale(8),
   },
   uploadingText: {
     color: colors.white,
-    fontSize: 13,
+    fontSize: moderateScale(13),
     fontWeight: '700',
+    flexShrink: 1,
   },
   imageActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: scale(10),
     marginTop: spacing.lg,
   },
   imageActionBtnPrimary: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: verticalScale(12),
     borderRadius: radii.md,
     backgroundColor: colors.green,
     alignItems: 'center',
   },
   imageActionTextPrimary: {
-    fontSize: 14,
+    fontSize: moderateScale(14),
     fontWeight: '700',
     color: colors.white,
   },
   imageActionBtnOutline: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: verticalScale(12),
+    paddingHorizontal: scale(16),
     borderRadius: radii.md,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.white,
   },
   imageActionTextOutline: {
-    fontSize: 14,
+    fontSize: moderateScale(14),
     fontWeight: '700',
     color: colors.muted,
   },
   uploadedMeta: {
     marginTop: spacing.md,
-    fontSize: 12,
+    fontSize: moderateScale(12),
     color: colors.muted,
-    lineHeight: 18,
+    lineHeight: moderateScale(18),
+    flexShrink: 1,
   },
   imageHint: {
     marginTop: spacing.md,
-    fontSize: 12,
+    fontSize: moderateScale(12),
     color: colors.muted,
-    lineHeight: 18,
+    lineHeight: moderateScale(18),
+    flexShrink: 1,
   },
   footer: {
-    padding: spacing.xl,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.white,
-    ...cardShadow,
+    marginVertical: spacing.md,
   },
   modalBackdrop: {
     flex: 1,
@@ -990,9 +985,9 @@ const styles = StyleSheet.create({
   },
   modalHandle: {
     alignSelf: 'center',
-    width: 40,
-    height: 4,
-    borderRadius: 2,
+    width: scale(40),
+    height: verticalScale(4),
+    borderRadius: moderateScale(2),
     backgroundColor: colors.border,
     marginTop: spacing.sm,
     marginBottom: spacing.md,
@@ -1004,37 +999,39 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: moderateScale(18),
     fontWeight: '800',
     color: colors.navy,
+    flexShrink: 1,
   },
   modalCloseBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: moderateScale(36),
+    height: moderateScale(36),
+    borderRadius: moderateScale(18),
     backgroundColor: colors.borderLight,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   modalClose: {
-    fontSize: 16,
+    fontSize: moderateScale(16),
     color: colors.muted,
     fontWeight: '700',
   },
   modalLabel: {
-    fontSize: 12,
+    fontSize: moderateScale(12),
     fontWeight: '700',
     color: colors.muted,
-    marginBottom: 8,
+    marginBottom: verticalScale(8),
   },
   typeRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: scale(8),
     marginBottom: spacing.lg,
   },
   typeChip: {
     flex: 1,
-    paddingVertical: 10,
+    paddingVertical: verticalScale(10),
     borderRadius: radii.md,
     borderWidth: 1,
     borderColor: colors.border,
@@ -1045,10 +1042,11 @@ const styles = StyleSheet.create({
     borderColor: colors.green,
   },
   typeChipText: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     fontWeight: '700',
     color: colors.navy,
     textTransform: 'capitalize',
+    flexShrink: 1,
   },
   typeChipTextActive: {
     color: colors.white,

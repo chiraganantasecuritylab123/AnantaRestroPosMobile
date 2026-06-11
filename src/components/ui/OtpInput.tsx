@@ -9,8 +9,10 @@ import {
   View,
 } from 'react-native';
 import {colors, radii} from '../../theme';
+import {moderateScale, scale, verticalScale} from '../../utils/responsive';
 
 const OTP_LENGTH = 6;
+const BOX = moderateScale(48);
 
 type Props = {
   value: string;
@@ -135,8 +137,6 @@ export const OtpInput: React.FC<Props> = ({
   );
 };
 
-const BOX = 48;
-
 const styles = StyleSheet.create({
   wrap: {
     position: 'relative',
@@ -152,21 +152,23 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 8,
+    gap: scale(8),
+    flexWrap: 'wrap',
   },
   box: {
     width: BOX,
     height: BOX,
     borderRadius: radii.md,
-    borderWidth: 1.5,
+    borderWidth: moderateScale(1.5),
     borderColor: colors.border,
     backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   boxFocused: {
     borderColor: colors.green,
-    borderWidth: 2,
+    borderWidth: moderateScale(2),
   },
   boxFilled: {
     borderColor: colors.border,
@@ -174,13 +176,13 @@ const styles = StyleSheet.create({
   input: {
     ...StyleSheet.absoluteFillObject,
     textAlign: 'center',
-    fontSize: 20,
+    fontSize: moderateScale(20),
     fontWeight: '700',
     color: colors.navy,
     padding: 0,
   },
   placeholder: {
-    fontSize: 18,
+    fontSize: moderateScale(18),
     color: colors.mutedLight,
     fontWeight: '400',
     pointerEvents: 'none',
