@@ -19,6 +19,7 @@ type Props = {
   onChange: (value: string) => void;
   /** Fires once when 6 digits are entered (typing, paste, or SMS autofill). */
   onComplete?: (value: string) => void;
+  onInputFocus?: () => void;
   autoFocus?: boolean;
 };
 
@@ -26,6 +27,7 @@ export const OtpInput: React.FC<Props> = ({
   value,
   onChange,
   onComplete,
+  onInputFocus,
   autoFocus = true,
 }) => {
   const inputs = useRef<Array<TextInput | null>>([]);
@@ -98,6 +100,7 @@ export const OtpInput: React.FC<Props> = ({
         importantForAutofill="yes"
         caretHidden
         accessibilityLabel="OTP autofill"
+        onFocus={onInputFocus}
       />
       <View style={styles.row}>
         {digits.map((digit, index) => {
@@ -119,7 +122,10 @@ export const OtpInput: React.FC<Props> = ({
                 value={digit}
                 onChangeText={t => onChangeText(index, t)}
                 onKeyPress={e => onKeyPress(index, e)}
-                onFocus={() => hiddenInputRef.current?.focus()}
+                onFocus={() => {
+                  onInputFocus?.();
+                  hiddenInputRef.current?.focus();
+                }}
                 keyboardType="number-pad"
                 maxLength={OTP_LENGTH}
                 selectTextOnFocus

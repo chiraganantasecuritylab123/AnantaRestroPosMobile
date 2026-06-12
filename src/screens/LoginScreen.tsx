@@ -1,9 +1,10 @@
-import React, {useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {
   View,
   Text,
   TextInput,
   StyleSheet,
+  Keyboard,
   KeyboardAvoidingView,
   ScrollView,
   Platform,
@@ -15,7 +16,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import Svg, {Circle, Path, Rect} from 'react-native-svg';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {
   usePhoneLoginMutation,
@@ -81,7 +82,8 @@ function OtpIcon() {
 }
 
 export const LoginScreen: React.FC<Props> = ({navigation}) => {
-  const [phone, setPhone] = useState(__DEV__ ? '' : '');
+  // const [phone, setPhone] = useState(__DEV__ ? '9876123456' : '');
+  const [phone, setPhone] = useState(__DEV__ ? '1231231233' : '');
   const [country, setCountry] = useState<CountryDialOption>(DEFAULT_COUNTRY);
   const [countryPickerOpen, setCountryPickerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,6 +93,61 @@ export const LoginScreen: React.FC<Props> = ({navigation}) => {
   const logoSize = useBrandLogoSize();
   const {height: screenH} = useWindowDimensions();
   const compact = screenH < verticalScale(680);
+  const insets = useSafeAreaInsets();
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollViewHeightRef = useRef(0);
+  const footerBottomInWrapRef = useRef(0);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const keyboardOpenRef = useRef(false);
+
+  const scrollToKeyboardBottom = useCallback(() => {
+    requestAnimationFrame(() => {
+      const viewHeight = scrollViewHeightRef.current;
+      const footerBottomInWrap = footerBottomInWrapRef.current;
+      if (viewHeight <= 0 || footerBottomInWrap <= 0) {
+        return;
+      }
+      const scrollPaddingTop = keyboardOpen
+        ? verticalScale(8) + verticalScale(4)
+        : verticalScale(24) + verticalScale(8);
+      const footerBottom = scrollPaddingTop + footerBottomInWrap;
+      const bottomInset = verticalScale(30);
+      const targetY = Math.max(0, footerBottom - viewHeight + bottomInset);
+      scrollRef.current?.scrollTo({y: targetY, animated: true});
+    });
+  }, [keyboardOpen]);
+
+  useEffect(() => {
+    keyboardOpenRef.current = keyboardOpen;
+  }, [keyboardOpen]);
+
+  useEffect(() => {
+    const showEvent =
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent =
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, () => {
+      setKeyboardOpen(true);
+      scrollToKeyboardBottom();
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardOpen(false);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [scrollToKeyboardBottom]);
+
+  useEffect(() => {
+    if (!keyboardOpen) {
+      return;
+    }
+    const timer = setTimeout(scrollToKeyboardBottom, 80);
+    return () => clearTimeout(timer);
+  }, [keyboardOpen, scrollToKeyboardBottom]);
 
   const termsUrl = resolveTermsUrl(appConfig?.data);
   const privacyUrl = resolvePrivacyUrl(appConfig?.data);
@@ -159,7 +216,7 @@ export const LoginScreen: React.FC<Props> = ({navigation}) => {
         preAuthToken,
         flow,
         expiresInSec,
-        devHint: otpDevHint,
+        devHint: '',
       });
     } catch (e: any) {
       setError(e?.data?.message ?? 'Unable to send OTP');
@@ -185,25 +242,40 @@ export const LoginScreen: React.FC<Props> = ({navigation}) => {
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <KeyboardAvoidingView
           style={styles.flex}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? moderateScale(8) : 0}>
+          behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+          keyboardVerticalOffset={
+            Platform.OS === 'ios' ? insets.top + verticalScale(100) : verticalScale(10)
+          }>
           <ScrollView
-            contentContainerStyle={styles.scroll}
+            ref={scrollRef}
+            onLayout={e => {
+              scrollViewHeightRef.current = e.nativeEvent.layout.height;
+              if (keyboardOpenRef.current) {
+                scrollToKeyboardBottom();
+              }
+            }}
+            contentContainerStyle={[
+              styles.scroll,
+              keyboardOpen && styles.scrollKeyboardOpen,
+            ]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
-            bounces={false}>
+            bounces={false}
+            automaticallyAdjustKeyboardInsets={!keyboardOpen}>
             <View style={styles.contentWrap}>
-            <View style={[styles.brand, compact && styles.brandCompact]}>
-              <Image
-                source={require('../assets/splash-screen-logo.png')}
-                style={[styles.logo, logoSize]}
-                resizeMode="contain"
-                accessibilityLabel="Ananta POS logo"
-              />
-              <Text style={[styles.tagline, compact && styles.taglineCompact]}>
-                Smart Billing. Complete Business Control.
-              </Text>
-            </View>
+            {!keyboardOpen ? (
+              <View style={[styles.brand, compact && styles.brandCompact]}>
+                <Image
+                  source={require('../assets/splash-screen-logo.png')}
+                  style={[styles.logo, logoSize]}
+                  resizeMode="contain"
+                  accessibilityLabel="Ananta POS logo"
+                />
+                <Text style={[styles.tagline, compact && styles.taglineCompact]}>
+                  Smart Billing. Complete Business Control.
+                </Text>
+              </View>
+            ) : null}
 
             <Card style={compact ? styles.formCardCompact : styles.formCard}>
               <View style={styles.cardIconWrap}>
@@ -243,6 +315,7 @@ export const LoginScreen: React.FC<Props> = ({navigation}) => {
                     country.nationalLength,
                   )}
                   onChangeText={onPhoneChange}
+                  onFocus={scrollToKeyboardBottom}
                   keyboardType="phone-pad"
                   maxLength={
                     country.nationalLength === 10
@@ -354,7 +427,16 @@ export const LoginScreen: React.FC<Props> = ({navigation}) => {
               </Text>
             </View>
 
-            <Text style={styles.versionText}>Version {getAppVersion()}</Text>
+            <View
+              onLayout={e => {
+                const {y, height} = e.nativeEvent.layout;
+                footerBottomInWrapRef.current = y + height;
+                if (keyboardOpenRef.current) {
+                  scrollToKeyboardBottom();
+                }
+              }}>
+              <Text style={styles.versionText}>Version {getAppVersion()}</Text>
+            </View>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -374,6 +456,11 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
     alignItems: 'center',
     marginTop: verticalScale(24),
+  },
+  scrollKeyboardOpen: {
+    marginTop: verticalScale(8),
+    paddingTop: verticalScale(4),
+    paddingBottom: spacing.lg,
   },
   contentWrap: {
     width: '100%',

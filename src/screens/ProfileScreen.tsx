@@ -1161,9 +1161,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xxl,
     paddingBottom: verticalScale(100),
     borderBottomLeftRadius: radii.xxl,
-    borderBottomRightRadius: radii.xxl,
-    
-    // minHeight: verticalScale(130),
+    borderBottomRightRadius: radii.xxl
   },
   heroTopRow: {
     flexDirection: 'column',

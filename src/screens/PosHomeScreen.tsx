@@ -460,7 +460,7 @@ export const PosHomeScreen: React.FC<Props> = ({ navigation }) => {
 
   const onMoreOrders = useCallback(() => {
     closeMoreMenu();
-    tabNavigation?.navigate('Orders', {screen: 'OrdersMain'});
+    tabNavigation?.navigate('Orders', { screen: 'OrdersMain' });
   }, [closeMoreMenu, tabNavigation]);
 
   const onMoreToggleView = useCallback(() => {
@@ -796,7 +796,7 @@ export const PosHomeScreen: React.FC<Props> = ({ navigation }) => {
           selectedPaymentType: paymentId,
         });
         console.log('invoiceBody', invoiceBody);
-        
+
         const res = await createOrderAndInvoice(invoiceBody).unwrap();
         const tokenNo = parseTokenNo(res);
         const orderId = res.orderId as string | number | undefined;

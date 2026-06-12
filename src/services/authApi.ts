@@ -1,5 +1,6 @@
 import {createApi} from '@reduxjs/toolkit/query/react';
 import {baseQueryWithReauthHandling} from './baseApi';
+import {isStructuredClientError} from '../utils/apiError';
 
 export interface SigninRequest {
   email: string;
@@ -168,6 +169,7 @@ export interface VerifyOtpResponse {
   outlet_id?: number | string;
   outletId?: number | string;
   code?: string;
+  attemptsRemaining?: number;
 }
 
 export type SignupBusinessType = 'dine_in' | 'takeaway' | 'both';
@@ -219,6 +221,12 @@ export const authApi = createApi({
         url: '/auth/otp/verify',
         method: 'POST',
         body,
+        validateStatus: (
+          response: {status: number},
+          result: unknown,
+        ) =>
+          (response.status >= 200 && response.status < 300) ||
+          isStructuredClientError(response.status, result),
       }),
     }),
     signupComplete: builder.mutation<SignupCompleteResponse, SignupCompleteRequest>({
