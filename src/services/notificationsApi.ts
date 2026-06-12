@@ -54,6 +54,8 @@ export type NotificationListItem = {
   when: string;
   isRead: boolean;
   type?: string;
+  event?: string;
+  payload?: Record<string, string>;
 };
 
 /** Normalize list response (camelCase / snake_case / nested `data`). */
@@ -107,10 +109,35 @@ export function parseNotificationsResponse(
   };
 }
 
+function mapNotificationPayload(
+  raw: ApiNotification,
+): Record<string, string> | undefined {
+  const source =
+    raw.data != null && typeof raw.data === 'object'
+      ? (raw.data as Record<string, unknown>)
+      : undefined;
+  if (!source) {
+    return undefined;
+  }
+
+  const payload: Record<string, string> = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (value != null) {
+      payload[key] = String(value);
+    }
+  }
+  return Object.keys(payload).length > 0 ? payload : undefined;
+}
+
 export function mapApiNotification(raw: ApiNotification): NotificationListItem {
   const isRead = Boolean(
     raw.is_read ?? raw.read ?? (raw.read_at != null || raw.readAt != null),
   );
+  const payload = mapNotificationPayload(raw);
+  const event =
+    payload?.event ??
+    (typeof raw.type === 'string' ? raw.type : undefined);
+
   return {
     id: String(raw.id),
     title: raw.title ?? raw.type ?? 'Notification',
@@ -118,6 +145,8 @@ export function mapApiNotification(raw: ApiNotification): NotificationListItem {
     when: raw.created_at ?? raw.createdAt ?? new Date().toISOString(),
     isRead,
     type: raw.type,
+    event,
+    payload,
   };
 }
 

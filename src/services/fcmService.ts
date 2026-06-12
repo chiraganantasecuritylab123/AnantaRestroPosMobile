@@ -1,5 +1,8 @@
+import notifee, {
+  AndroidImportance,
+  AuthorizationStatus,
+} from '@notifee/react-native';
 import {PermissionsAndroid, Platform} from 'react-native';
-import {showDialog} from '../context/DialogProvider';
 import messaging, {
   type FirebaseMessagingTypes,
 } from '@react-native-firebase/messaging';
@@ -8,16 +11,45 @@ import {
   persistPushNotification,
   type StoredPushNotification,
 } from '../storage/notificationsStorage';
+import {normalizeNotificationData} from '../navigation/notificationNavigation';
+import {playOrderNotificationSoundIfNeeded} from '../utils/orderNotificationSound';
+import {ensureNotificationAudibleVolume} from '../utils/notificationVolume';
 
-const ANDROID_CHANNEL_ID = 'pos_default';
+/** Silent channel — no default system notification sound. */
+const ANDROID_CHANNEL_ID = 'pos_silent';
+
+export function getRemoteMessageContent(
+  message: FirebaseMessagingTypes.RemoteMessage,
+): {title: string; body: string} {
+  const title =
+    message.notification?.title ?? message.data?.title ?? 'Notification';
+  const body = message.notification?.body ?? message.data?.body ?? '';
+  return {title, body};
+}
 
 export async function ensureAndroidNotificationChannel(): Promise<void> {
   if (Platform.OS !== 'android') {
     return;
   }
-  // RN Firebase reads default channel from manifest; this is a no-op placeholder
-  // for future Notifee integration if needed.
-  void ANDROID_CHANNEL_ID;
+
+  await notifee.createChannel({
+    id: ANDROID_CHANNEL_ID,
+    name: 'POS notifications',
+    importance: AndroidImportance.HIGH,
+    vibration: true,
+  });
+}
+
+export async function configureForegroundPresentation(): Promise<void> {
+  if (Platform.OS !== 'ios') {
+    return;
+  }
+
+  await messaging().setForegroundPresentationOptions({
+    alert: true,
+    badge: true,
+    sound: false,
+  });
 }
 
 export async function requestNotificationPermission(): Promise<boolean> {
@@ -34,6 +66,14 @@ export async function requestNotificationPermission(): Promise<boolean> {
   const enabled =
     status === messaging.AuthorizationStatus.AUTHORIZED ||
     status === messaging.AuthorizationStatus.PROVISIONAL;
+
+  if (Platform.OS === 'ios') {
+    const notifeeSettings = await notifee.requestPermission();
+    const notifeeGranted =
+      notifeeSettings.authorizationStatus === AuthorizationStatus.AUTHORIZED ||
+      notifeeSettings.authorizationStatus === AuthorizationStatus.PROVISIONAL;
+    return enabled && notifeeGranted;
+  }
 
   return enabled;
 }
@@ -75,9 +115,7 @@ export async function registerFcmTokenWithBackend(
 export function remoteMessageToStored(
   message: FirebaseMessagingTypes.RemoteMessage,
 ): StoredPushNotification {
-  const title =
-    message.notification?.title ?? message.data?.title ?? 'Notification';
-  const body = message.notification?.body ?? message.data?.body ?? '';
+  const {title, body} = getRemoteMessageContent(message);
   const receivedAt = new Date().toISOString();
   const id =
     message.messageId ??
@@ -93,17 +131,57 @@ export function remoteMessageToStored(
   return {id, title, body, receivedAt, data};
 }
 
+export async function displayForegroundNotification(
+  message: FirebaseMessagingTypes.RemoteMessage,
+): Promise<void> {
+  const {title, body} = getRemoteMessageContent(message);
+  if (!title && !body) {
+    return;
+  }
+
+  if (Platform.OS === 'ios' && message.notification) {
+    return;
+  }
+
+  await ensureAndroidNotificationChannel();
+
+  await notifee.displayNotification({
+    id: message.messageId ?? undefined,
+    title,
+    body,
+    data: normalizeNotificationData(message.data),
+    android:
+      Platform.OS === 'android'
+        ? {
+            channelId: ANDROID_CHANNEL_ID,
+            smallIcon: 'ic_notification',
+            pressAction: {id: 'default'},
+            importance: AndroidImportance.HIGH,
+          }
+        : undefined,
+    ios:
+      Platform.OS === 'ios'
+        ? {
+            foregroundPresentationOptions: {
+              alert: true,
+              badge: true,
+              sound: false,
+            },
+          }
+        : undefined,
+  });
+}
+
 export async function handleIncomingRemoteMessage(
   message: FirebaseMessagingTypes.RemoteMessage,
   options?: {showForegroundAlert?: boolean},
 ): Promise<StoredPushNotification> {
   const stored = await persistPushNotification(message);
+  await ensureNotificationAudibleVolume();
+  playOrderNotificationSoundIfNeeded(message);
 
-  if (options?.showForegroundAlert && message.notification) {
-    showDialog(
-      message.notification.title ?? 'Notification',
-      message.notification.body ?? '',
-    );
+  if (options?.showForegroundAlert) {
+    await displayForegroundNotification(message);
   }
 
   return stored;

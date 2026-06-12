@@ -11,6 +11,7 @@ import {
 
 // export const BASE_URL = API_BASE_URL;
 export const BASE_URL = 'http://192.168.1.164:8001/api/v1';
+// export const BASE_URL = 'https://api.pos.anantalabs.in/api/v1';
 
 export const rawBaseQuery = fetchBaseQuery({
   baseUrl: BASE_URL,

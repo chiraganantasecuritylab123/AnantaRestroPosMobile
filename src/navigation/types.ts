@@ -58,8 +58,12 @@ export type SalesOrdersParams = {
   fromProfile?: boolean;
 };
 
+export type OrdersMainParams = {
+  orderId?: string;
+};
+
 export type OrdersStackParamList = {
-  OrdersMain: undefined;
+  OrdersMain: OrdersMainParams | undefined;
   SalesOrders: SalesOrdersParams | undefined;
 };
 

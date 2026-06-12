@@ -58,7 +58,7 @@
       android:supportsRtl="true">
       <meta-data
         android:name="com.google.firebase.messaging.default_notification_channel_id"
-        android:value="pos_default"
+        android:value="pos_silent"
         tools:replace="android:value" />
       <activity
         android:name=".MainActivity"

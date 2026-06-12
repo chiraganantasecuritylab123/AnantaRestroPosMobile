@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -568,7 +568,7 @@ function OrderDetailModal({
   );
 }
 
-export const OrdersScreen: React.FC<NativeStackScreenProps<OrdersStackParamList, 'OrdersMain'>> = ({ navigation }) => {
+export const OrdersScreen: React.FC<NativeStackScreenProps<OrdersStackParamList, 'OrdersMain'>> = ({ navigation, route }) => {
   const { data: posInit } = useGetPosInitQuery();
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string | undefined>();
@@ -677,6 +677,24 @@ export const OrdersScreen: React.FC<NativeStackScreenProps<OrdersStackParamList,
     setPage(1);
     refetch();
   }, [refetch]);
+
+  const focusOrderId = route.params?.orderId;
+
+  useEffect(() => {
+    if (!focusOrderId || orders.length === 0) {
+      return;
+    }
+
+    const match = orders.find(
+      order =>
+        String(order.orderId) === String(focusOrderId) ||
+        String(order.id) === String(focusOrderId),
+    );
+    if (match) {
+      setSelectedOrder(match);
+      navigation.setParams({orderId: undefined});
+    }
+  }, [focusOrderId, navigation, orders]);
 
   const syncSelectedOrderAfterChange = useCallback(async () => {
     const result = await refetch();

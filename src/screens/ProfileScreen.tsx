@@ -43,6 +43,7 @@ import {
   useUploadStoreImageMutation,
   type StoreSettings,
 } from '../services/storeSettingsApi';
+import { QrMenuModal } from '../components/QrMenuModal';
 import { showDialog } from '../context/DialogProvider';
 import { updateSubscriptionActive } from '../features/authTokenSlice';
 import { useAppDispatch, useAppSelector } from '../useAppHooks';
@@ -71,6 +72,7 @@ import type { MainTabParamList, ProfileStackParamList } from '../navigation/type
 import { formatUserPhoneDisplay } from '../utils/countryDialCodes';
 import { formatMoney, resolveCurrencySymbol } from '../utils/currency';
 import { openExternalUrl } from '../utils/openExternalUrl';
+import { buildQrMenuUrl } from '../utils/qrMenuUrl';
 import {
   ensureCameraPermission,
   ensureGalleryPermission,
@@ -216,6 +218,7 @@ export const ProfileScreen: React.FC = () => {
   const [cancelSubscription, { isLoading: cancellingSubscription }] =
     useCancelSubscriptionMutation();
   const [editVisible, setEditVisible] = useState(false);
+  const [qrMenuModalVisible, setQrMenuModalVisible] = useState(false);
   const [localStoreImageUri, setLocalStoreImageUri] = useState('');
   const [savingStoreImage, setSavingStoreImage] = useState(false);
   const [storeForm, setStoreForm] = useState<StoreFormState>({
@@ -271,6 +274,10 @@ export const ProfileScreen: React.FC = () => {
   const currencyLabel = storeSettings?.currency
     ? `${resolveCurrencySymbol(storeSettings.currency)} (${storeSettings.currency})`
     : '—';
+  const qrMenuUrl = useMemo(
+    () => buildQrMenuUrl(storeSettings?.uniqueQRCode),
+    [storeSettings?.uniqueQRCode],
+  );
   const support = appConfig?.data?.contact_support;
 
   useEffect(() => {
@@ -284,6 +291,14 @@ export const ProfileScreen: React.FC = () => {
       setStoreForm(storeToForm(storeSettings));
     }
     setEditVisible(true);
+  };
+
+  const openQrMenuModal = () => {
+    if (!qrMenuUrl) {
+      showDialog('Unavailable', 'This link is not configured yet.');
+      return;
+    }
+    setQrMenuModalVisible(true);
   };
 
   const closeStoreEdit = () => setEditVisible(false);
@@ -729,6 +744,9 @@ export const ProfileScreen: React.FC = () => {
               iconName="grid"
               label="QR menu"
               value={storeSettings?.isQRMenuEnabled ?? false}
+              onPress={
+                storeSettings?.isQRMenuEnabled ? openQrMenuModal : undefined
+              }
             />
             <View style={styles.divider} />
             <ToggleRow
@@ -736,12 +754,12 @@ export const ProfileScreen: React.FC = () => {
               label="QR orders"
               value={storeSettings?.isQROrderEnabled ?? false}
             />
-            <View style={styles.divider} />
-            <ToggleRow
+            {/* <View style={styles.divider} /> */}
+            {/* <ToggleRow
               iconName="clipboard"
               label="Customer feedback"
               value={storeSettings?.isFeedbackEnabled ?? false}
-            />
+            /> */}
           </Card>
 
           {/* <Text style={styles.sectionTitle}>My details</Text>
@@ -937,6 +955,13 @@ export const ProfileScreen: React.FC = () => {
         </ScrollView>
       </SafeAreaView>
 
+      <QrMenuModal
+        visible={qrMenuModalVisible}
+        url={qrMenuUrl}
+        title="QR menu"
+        onClose={() => setQrMenuModalVisible(false)}
+      />
+
       <Modal
         visible={editVisible}
         animationType="slide"
@@ -1083,12 +1108,14 @@ function ToggleRow({
   iconName,
   label,
   value,
+  onPress,
 }: {
   iconName: IconName;
   label: string;
   value: boolean;
+  onPress?: () => void;
 }) {
-  return (
+  const row = (
     <View style={styles.toggleRow}>
       <View style={styles.contactIconWrap}>
         <Icon name={iconName} size={moderateScale(18)} color={colors.muted} />
@@ -1099,6 +1126,16 @@ function ToggleRow({
       </Text>
     </View>
   );
+
+  if (onPress) {
+    return (
+      <TouchableOpacity onPress={onPress} activeOpacity={0.85}>
+        {row}
+      </TouchableOpacity>
+    );
+  }
+
+  return row;
 }
 
 function ContactRow({

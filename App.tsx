@@ -70,6 +70,8 @@ import {CustomersScreen} from './src/screens/CustomersScreen';
 import {CategoriesListScreen} from './src/screens/CategoriesListScreen';
 import {NetworkStatusBanner} from './src/components/NetworkStatusBanner';
 import {DialogProvider} from './src/context/DialogProvider';
+import {navigationRef} from './src/navigation/navigationRef';
+import {flushPendingNotificationNavigation} from './src/navigation/notificationNavigation';
 import {SubscriptionBlockedModal} from './src/components/SubscriptionBlockedModal';
 import {isSubscriptionActive} from './src/utils/subscription';
 
@@ -418,7 +420,10 @@ function RootNavigator() {
     <AppConfigGate booting={false}>
       <>
         <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-        <NavigationContainer theme={navigationTheme}>
+        <NavigationContainer
+          ref={navigationRef}
+          theme={navigationTheme}
+          onReady={flushPendingNotificationNavigation}>
           <RootStack.Navigator screenOptions={{headerShown: false}}>
             {token ? (
               needsSubscription ? (

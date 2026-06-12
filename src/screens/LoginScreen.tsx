@@ -83,7 +83,7 @@ function OtpIcon() {
 
 export const LoginScreen: React.FC<Props> = ({navigation}) => {
   // const [phone, setPhone] = useState(__DEV__ ? '9876123456' : '');
-  const [phone, setPhone] = useState(__DEV__ ? '1231231233' : '');
+  const [phone, setPhone] = useState(__DEV__ ? '' : '');
   const [country, setCountry] = useState<CountryDialOption>(DEFAULT_COUNTRY);
   const [countryPickerOpen, setCountryPickerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);

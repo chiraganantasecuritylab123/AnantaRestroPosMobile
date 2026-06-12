@@ -5,6 +5,7 @@ declare module '*.mp3' {
 
 declare module '@env' {
   export const API_BASE_URL: string;
+  export const QR_MENU_BASE_URL: string;
   export const VITE_FIREBASE_API_KEY: string;
   export const VITE_FIREBASE_AUTH_DOMAIN: string;
   export const VITE_FIREBASE_PROJECT_ID: string;

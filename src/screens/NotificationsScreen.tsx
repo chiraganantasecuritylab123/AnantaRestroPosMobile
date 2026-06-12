@@ -33,6 +33,7 @@ import {
   scale,
   verticalScale,
 } from '../utils/responsive';
+import { navigateFromNotificationPayload } from '../navigation/notificationNavigation';
 import type { DashboardStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<DashboardStackParamList, 'Notifications'>;
@@ -142,13 +143,24 @@ export const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
   }, [markAllRead]);
 
   const handlePressItem = useCallback(
-    async (id: string, isRead: boolean) => {
-      if (!isRead) {
+    async (item: NotificationListItem) => {
+      if (!item.isRead) {
         try {
-          await markRead(id).unwrap();
+          await markRead(item.id).unwrap();
         } catch {
           return;
         }
+      }
+
+      const payload =
+        item.payload ??
+        (item.event
+          ? {
+              event: item.event,
+            }
+          : undefined);
+      if (payload) {
+        navigateFromNotificationPayload(payload);
       }
     },
     [markRead],
@@ -315,7 +327,7 @@ export const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
                 ]}
                 activeOpacity={0.88}
                 disabled={busy}
-                onPress={() => handlePressItem(item.id, item.isRead)}>
+                onPress={() => void handlePressItem(item)}>
                 <View style={styles.cardTop}>
                   <View style={styles.titleRow}>
                     {!item.isRead ? <View style={styles.unreadDot} /> : null}
